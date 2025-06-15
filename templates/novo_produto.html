@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block titulo %}Login{% endblock %}
+{% block conteudo %}
+    <h1>Cadastrar Novo Produto</h1>
+
+    <form method="POST">
+        <label for="nomeProduto">Nome do Produto:</label><br>
+        <input type="text" name="nomeProduto" id="nomeProduto" required>
+        <br><br>
+        <input type="submit" value="Cadastrar">
+    </form>
+
+    <a href="{{ url_for('produtos') }}">← Voltar para a lista de produtos</a>
+{% endblock %}

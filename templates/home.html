@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block titulo %}Início{% endblock %}
+{% block conteudo %}
+    {% if current_user.is_authenticated %}
+        <h2>Olá, {{ current_user.nome }}!</h2>
+    {% else %}
+        <h2>Você não está logado!</h2>
+    {% endif %}
+    <img src="{{ url_for('static', filename='image/banner.png') }}" alt="Banner" class="banner">
+{% endblock %}
