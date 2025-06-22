@@ -5,10 +5,17 @@
 
     <form method="POST">
         <label for="nomeProduto">Nome do Produto:</label><br>
-        <input type="text" name="nomeProduto" id="nomeProduto" required>
-        <br><br>
-        <input type="submit" value="Cadastrar">
+        <input type="text" name="nomeProduto" required><br>
+
+        <label for="precoProduto">Preço:</label><br>
+        <input type="number" name="precoProduto" step="0.01"><br>
+
+        <label for="imagemProduto">URL da Imagem:</label><br>
+        <input type="text" name="imagemProduto"><br>
+
+        <br><input type="submit" value="Cadastrar">
     </form>
+
 
     <a href="{{ url_for('produtos') }}">← Voltar para a lista de produtos</a>
 {% endblock %}

@@ -63,7 +63,15 @@ def novo_produto():
 
     if request.method == "POST":
         nome_produto = request.form["nomeProduto"]
-        novo = Produto(nome=nome_produto, usuario_id=current_user.id)
+        preco = float(request.form["precoProduto"])
+        imagem = request.form["imagemProduto"]
+
+        novo = Produto(
+            nome=nome_produto,
+            preco=preco,
+            imagem=imagem,
+            id_empresa=current_user.id
+        )
         db.session.add(novo)
         db.session.commit()
 
@@ -73,18 +81,51 @@ def novo_produto():
 def produtos():
     if request.method == "POST" and current_user.tipo == "admin":
         nome_produto = request.form["nomeProduto"]
-        novo_produto = Produto(nome=nome_produto, usuario_id=current_user.id)
-        db.session.add(novo_produto)
+        produto = Produto(nome=nome_produto, id_empresa=current_user.id)
+        db.session.add(produto)
         db.session.commit()
         return redirect(url_for("produtos"))
 
     if current_user.is_authenticated and current_user.tipo == "admin":
-        produtos = Produto.query.filter_by(usuario_id=current_user.id).all()
+        produtos = Produto.query.filter_by(id_empresa=current_user.id).all()
     else:
         produtos = Produto.query.all()
 
     return render_template("produtos.html", produtos=produtos)
 
+@app.route("/produtos/<int:id>")
+def detalhe_produto(id):
+    produto = Produto.query.get_or_404(id)
+    return render_template("detalhe_produto.html", produto=produto)
+
+@app.route("/produtos/<int:id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_produto(id):
+    produto = Produto.query.get_or_404(id)
+    if current_user.id != produto.id_empresa:
+        return "Acesso negado", 403
+
+
+    if request.method == "POST":
+        produto.nome = request.form["nomeProduto"]
+        produto.preco = float(request.form["precoProduto"])
+        produto.imagem = request.form["imagemProduto"]
+        db.session.commit()
+        return redirect(url_for("produtos"))
+
+
+    return render_template("editar_produto.html", produto=produto)
+
+@app.route("/produtos/<int:id>/excluir", methods=["POST"])
+@login_required
+def excluir_produto(id):
+    produto = Produto.query.get_or_404(id)
+    if current_user.id != produto.id_empresa:
+        return "Acesso negado", 403
+
+    db.session.delete(produto)
+    db.session.commit()
+    return redirect(url_for("produtos"))
 
 
 @app.route("/logout")

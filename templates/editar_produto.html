@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block titulo %}Editar Produto{% endblock %}
+{% block conteudo %}
+    <h1>Editar Produto</h1>
+    <form method="POST">
+        <label for="nomeProduto">Nome:</label>
+        <input type="text" name="nomeProduto" value="{{ produto.nome }}"><br>
+
+        <label for="precoProduto">Preço:</label>
+        <input type="number" name="precoProduto" step="0.01" value="{{ produto.preco }}"><br>
+
+        <label for="imagemProduto">Imagem:</label>
+        <input type="text" name="imagemProduto" value="{{ produto.imagem }}"><br>
+
+        <input type="submit" value="Salvar Alterações">
+    </form>
+    <a href="{{ url_for('produtos') }}">← Cancelar</a>
+{% endblock %}
