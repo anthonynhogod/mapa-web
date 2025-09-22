@@ -12,7 +12,6 @@
         <nav>
             <a href="{{ url_for('home') }}">Início</a>
             {% if current_user.is_authenticated %}
-                <a href="{{ url_for('produtos') }}">Produtos</a>
                 <a href="{{ url_for('logout') }}">Sair</a>
             {% else %}
                 <a href="{{ url_for('login') }}">Login</a>
