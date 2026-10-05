@@ -10,10 +10,10 @@ Automação de lançamentos no PGA-SIGSIF (MAPA), com dois módulos no mesmo sis
 Fluxo comum: upload → validação → preview (pendências de De→Para bloqueiam) → `ExecJob` → worker envia ao MAPA.
 
 **Execução (`EXEC_BACKEND`)**
-- `api` (padrão): envio pelo **webservice REST do PGA-SIGSIF** (manual v1.3), sem navegador. O ambiente padrão é **homologação** (`MAPA_API_AMBIENTE=homologacao`); produção só com `producao` explícito.
-- `browser`: Selenium + scripts JS (legado, mantido até o envio por API ser validado em homologação).
+- `browser` (**padrão por enquanto**): Selenium + scripts JS no portal.
+- `api`: envio pelo **webservice REST do PGA-SIGSIF** (manual v1.3), sem navegador. Implementado e testado só contra um servidor simulado; **desligado** até o MAPA liberar o acesso do usuário/IP. O ambiente padrão é **homologação** (`MAPA_API_AMBIENTE=homologacao`); produção só com `producao` explícito.
 
-### Webservice (modo `api`)
+### Webservice (modo `api`, desligado por padrão: `EXEC_BACKEND=api` para ligar)
 
 1. **Credenciais MAPA** (Configurações): além de usuário/senha/SIF, informe CPF/CNPJ, âmbito (SIF/ER), UF e IBGE do estabelecimento. Botão **Testar conexão** (`GET /especies`).
 2. **Admin › API do MAPA**: mostra o ambiente, baixa os catálogos (`/especies`, `/diagnosticos`, `/partes-afetadas`, `/destino-condenacoes`, `/paises`, `/produtos`) e **sincroniza** os ids da API com o De→Para (só preenche vazios e só quando o nome casa de forma inequívoca; nunca sobrescreve).

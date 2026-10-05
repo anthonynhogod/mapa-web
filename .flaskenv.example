@@ -16,8 +16,8 @@ NAV_PROFILE=prod
 NAV_TAP_UI=never
 APP_ENV=dev
 
-# --- Execução: webservice do MAPA (padrão) ou navegador/Selenium (legado) ---
-EXEC_BACKEND=api
+# --- Execução: navegador/Selenium (padrão) ou webservice do MAPA (precisa de acesso liberado pelo MAPA) ---
+EXEC_BACKEND=browser
 # homologacao (padrão, ambiente de testes do MAPA) | producao (grava dados REAIS)
 MAPA_API_AMBIENTE=homologacao
 # MAPA_API_URL=            # sobrescreve a raiz dos serviços (proxy/testes)

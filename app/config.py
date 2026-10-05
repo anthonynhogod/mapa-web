@@ -45,8 +45,8 @@ class BaseConfig:
     NAV_MODE = os.getenv("NAV_MODE", "HIDE")
     NAV_SPEED_PROFILE = os.getenv("NAV_SPEED_PROFILE", "balanced")
     NAV_TAP_UI = os.getenv("NAV_TAP_UI", "auto")
-    # Execucao dos lancamentos: "api" (webservice do MAPA) | "browser" (Selenium, legado)
-    EXEC_BACKEND = os.getenv("EXEC_BACKEND", "api").strip().lower()
+    # Execucao dos lancamentos: "browser" (Selenium; padrao ate haver acesso ao webservice) | "api" (webservice do MAPA)
+    EXEC_BACKEND = os.getenv("EXEC_BACKEND", "browser").strip().lower()
     # Webservice PGA-SIGSIF. Padrao = HOMOLOGACAO; producao so com MAPA_API_AMBIENTE=producao.
     MAPA_API_AMBIENTE = os.getenv("MAPA_API_AMBIENTE", "homologacao").strip().lower()
     MAPA_API_URL = os.getenv("MAPA_API_URL") or None          # sobrescreve a raiz (testes/proxy)

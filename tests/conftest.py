@@ -22,7 +22,8 @@ def app():
     from app.logic.constantes import invalidar_cache
     invalidar_cache()                  # cache de constantes e global ao processo: isola cada teste
     application = create_app()
-    application.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
+    # os testes de webservice partem do modo api; os de navegador sobrescrevem para 'browser'
+    application.config.update(TESTING=True, WTF_CSRF_ENABLED=False, EXEC_BACKEND="api")
     with application.app_context():
         db.create_all()
         seed_comercializacao()
