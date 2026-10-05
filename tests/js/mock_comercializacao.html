@@ -86,8 +86,9 @@ function tabelaTransacoes(F) {
   const ini = S.tPag * PAGE;
   const rows = S.transacoes.slice(ini, ini + PAGE).map((t, k) => {
     const i = ini + k;
-    return `<tr data-ri="${i}"><td>Venda</td><td>${t.uf}</td><td>${t.produtos.length} prod.</td>
-      <td><button type="button" id="${F}:dtbTransacoes:${i}:commandEventIncluirProduto">produtos</button></td></tr>`;
+    return `<tr data-ri="${i}"><td>${t.tipo || 'Venda'}</td><td>${t.uf}</td><td>${t.produtos.length} prod.</td>
+      <td><button type="button" id="${F}:dtbTransacoes:${i}:commandEventIncluirProduto">produtos</button>
+      <button type="button" id="${F}:dtbTransacoes:${i}:commandEventRemove_transacao">x</button></td></tr>`;
   }).join('');
   const dis = (c) => c ? ' ui-state-disabled' : '';
   return `<div class="ui-datatable" id="${F}:dtbTransacoes:datatable_dtbTransacoes">
@@ -113,7 +114,7 @@ function buildDialogs() {
   const ufOpts = ['<option value="">Selecione</option>'].concat(UFS.map(u => `<option value="${u}">${u}</option>`)).join('');
   d.innerHTML = `
   <div class="ui-dialog" id="dlgInsertTransacao"><form id="insertTransacao:frmDialog">
-    <select id="insertTransacao:frmDialog:tipoTransacao_input"><option value="">-</option><option value="V">Venda</option><option value="C">Compra</option></select>
+    <select id="insertTransacao:frmDialog:tipoTransacao_input"><option value="">-</option><option value="V">Venda</option><option value="R">Recebimento</option><option value="E">Expedição</option></select>
     <select id="insertTransacao:frmDialog:ambito_input"><option value="">-</option><option value="I">Interno</option><option value="E">Externo</option></select>
     <select id="insertTransacao:frmDialog:tipoOperador_input"><option value="">-</option><option value="A">A</option><option value="B">B</option></select>
     <select id="insertTransacao:frmDialog:uf_ufI:uf_ufI_input">${ufOpts}</select>
@@ -235,13 +236,16 @@ function handle(cfg) {
   if (known(/dtbTransacoes:transacao:commandAdd_transacao$/)) return;
   if (known(/^insertTransacao:frmDialog:.*commandDialogAdd_/)) {
     const uf = val('insertTransacao:frmDialog:uf_ufI:uf_ufI_input');
+    const ts = document.getElementById('insertTransacao:frmDialog:tipoTransacao_input');
+    const tipo = ts.options[ts.selectedIndex].text;
     if (!uf) return setMsg('error', 'UF obrigatória');
-    if (S.transacoes.some(t => t.uf === uf)) return setMsg('error', `UF ${uf} já informada`);
-    S.transacoes.push({ uf, produtos: [] });
+    if (S.transacoes.some(t => t.uf === uf && (t.tipo || 'Venda') === tipo)) return setMsg('error', `UF ${uf} já informada`);
+    S.transacoes.push({ uf, tipo, produtos: [] });
     S.tPag = Math.max(0, Math.ceil(S.transacoes.length / PAGE) - 1) * 0;   // portal volta p/ 1a pagina
     document.getElementById('dlgInsertTransacao').classList.remove('open');
     return;
   }
+  if (known(/dtbTransacoes:\d+:commandEventRemove_transacao$/)) { S.transacoes.splice(Number(s.match(/dtbTransacoes:(\d+):/)[1]), 1); return; }
   if (known(/dtbTransacoes:\d+:commandEventIncluirProduto$/)) { S.rowAtual = Number(s.match(/dtbTransacoes:(\d+):/)[1]); S.produtoSel = null; return; }
   if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogQuery_'))) {
     const termo = val(`${P.qry}:frmDialog:produto:produto`).toLowerCase();

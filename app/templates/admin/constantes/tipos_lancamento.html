@@ -1,0 +1,79 @@
+{% extends "admin/layout.html" %}
+{% block title %}Constantes — Tipos de lançamento{% endblock %}
+{% block content %}
+
+{% include "admin/constantes/_abas.html" %}
+
+{% if itens is not none %}
+<div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+  <h2 class="titulo-form" style="margin:0;">Tipos de lançamento (comercialização)</h2>
+  <a class="btn btn--outline btn--table" href="{{ url_for('admin.tipo_lancamento_form') }}">Novo</a>
+</div>
+<p style="opacity:.75; font-size:.9em;">
+  Venda, recebimento e expedição dividem o mesmo registro do período no portal; muda a combinação
+  de opções do formulário “Incluir estado”. A planilha de cada tipo precisa de um parser
+  registrado no código (hoje só <code>venda</code>).
+</p>
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr><th>Código</th><th>Nome</th><th>Rótulo no portal</th><th>Tipo transação</th><th>Âmbito</th><th>Operador</th><th>Status</th><th>Ações</th></tr>
+    </thead>
+    <tbody>
+      {% for it in itens %}
+      <tr>
+        <td><code>{{ it.codigo }}</code></td><td>{{ it.nome }}</td><td>{{ it.rotulo_portal }}</td>
+        <td>{{ it.tipo_transacao_idx }}</td><td>{{ it.ambito_idx }}</td><td>{{ it.operador_idx }}</td>
+        <td>{{ 'Ativo' if it.ativo else 'Inativo' }}</td>
+        <td class="acoes"><a class="btn btn--outline btn--table"
+            href="{{ url_for('admin.tipo_lancamento_form', item_id=it.id) }}">Editar</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">Nenhum tipo cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<h2 class="titulo-form">{{ 'Novo' if novo else 'Editar' }} — Tipo de lançamento</h2>
+<form method="post">
+  <div class="campo">
+    <label for="codigo">Código</label>
+    <input type="text" id="codigo" name="codigo" required {{ 'readonly' if item else '' }}
+           value="{{ item.codigo if item else '' }}" placeholder="ex.: recebimento">
+    <small>Identificador interno (minúsculas/números). Não muda depois de criado.</small>
+  </div>
+  <div class="campo">
+    <label for="nome">Nome</label>
+    <input type="text" id="nome" name="nome" required value="{{ item.nome if item else '' }}">
+  </div>
+  <div class="campo">
+    <label for="rotulo_portal">Rótulo no portal</label>
+    <input type="text" id="rotulo_portal" name="rotulo_portal" required value="{{ item.rotulo_portal if item else '' }}">
+    <small>Texto do tipo como aparece no portal (opção do select e coluna da tabela de transações).</small>
+  </div>
+  {% for campo, rotulo in [('tipo_transacao_idx', 'Índice da opção em “Tipo de transação”'),
+                           ('ambito_idx', 'Índice da opção em “Âmbito”'),
+                           ('operador_idx', 'Índice da opção em “Tipo de operador”')] %}
+  <div class="campo">
+    <label for="{{ campo }}">{{ rotulo }}</label>
+    <input type="number" min="1" id="{{ campo }}" name="{{ campo }}" required value="{{ item[campo] if item else '' }}">
+    <small>Posição no select (0 = placeholder).</small>
+  </div>
+  {% endfor %}
+  <div class="campo">
+    <label for="obs">Observação</label>
+    <input type="text" id="obs" name="obs" value="{{ item.obs or '' if item else '' }}">
+  </div>
+  <div class="campo">
+    <label for="ativo">Status</label>
+    <select id="ativo" name="ativo">
+      <option value="1" {{ 'selected' if not item or item.ativo else '' }}>Ativo</option>
+      <option value="0" {{ 'selected' if item and not item.ativo else '' }}>Inativo</option>
+    </select>
+  </div>
+  <button class="btn btn--primary" type="submit">Salvar</button>
+  <a class="btn btn--outline" href="{{ url_for('admin.tipos_lancamento') }}">Cancelar</a>
+</form>
+{% endif %}
+{% endblock %}

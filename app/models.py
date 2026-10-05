@@ -158,6 +158,8 @@ class Registro(db.Model):
     tipo = db.Column(db.String(20), nullable=False, default="abate", server_default="abate", index=True)
     periodo_ini = db.Column(db.Date, nullable=True)
     periodo_fim = db.Column(db.Date, nullable=True)
+    # Comercializacao: codigo do tipo de lancamento (venda | recebimento | expedicao ...)
+    lancamento = db.Column(db.String(30), nullable=True)
 
     data_registro = db.Column(db.DateTime, nullable=False, server_default=func.now())
     data_inicio = db.Column(db.DateTime, nullable=True)
@@ -213,6 +215,13 @@ class Registro(db.Model):
     @property
     def is_comercializacao(self) -> bool:
         return self.tipo == "comercializacao"
+
+    @property
+    def tipo_label(self) -> str:
+        """Modulo para exibicao em listas: 'Abate' ou 'Comercialização (venda)'."""
+        if self.is_comercializacao:
+            return f"Comercialização ({self.lancamento or 'venda'})"
+        return "Abate"
 
     @property
     def periodo_label(self) -> str:
@@ -594,3 +603,23 @@ class EstadoVendaAlias(db.Model):
     alias_norm = db.Column(db.String(60), nullable=False, unique=True, index=True)
 
     estado = relationship("EstadoVenda", back_populates="aliases")
+
+
+class TipoLancamento(_ConstMixin, db.Model):
+    """
+    Tipo de lancamento do Mapa de Comercializacao (venda, recebimento, expedicao...).
+    Todos entram no MESMO registro do periodo no portal; o que muda e a combinacao de
+    opcoes do formulario "Incluir estado" (indices dos selects) e o rotulo mostrado na
+    tabela de transacoes (usado para detectar lancamento anterior do mesmo tipo).
+    """
+    __tablename__ = "tipo_lancamento"
+
+    codigo = db.Column(db.String(30), nullable=False, unique=True)          # 'venda'
+    nome = db.Column(db.String(60), nullable=False)                        # exibicao
+    tipo_transacao_idx = db.Column(db.Integer, nullable=False)             # select "tipo de transacao"
+    ambito_idx = db.Column(db.Integer, nullable=False)                     # select "ambito"
+    operador_idx = db.Column(db.Integer, nullable=False)                   # select "tipo de operador"
+    rotulo_portal = db.Column(db.String(60), nullable=False)               # texto do tipo no portal
+
+    def __repr__(self):
+        return f"<TipoLancamento {self.codigo!r} ({self.tipo_transacao_idx},{self.ambito_idx},{self.operador_idx})>"

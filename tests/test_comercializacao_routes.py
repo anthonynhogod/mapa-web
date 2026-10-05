@@ -27,7 +27,7 @@ def _login(client, nome="op"):
 
 
 def _upload(client, buf, nome="vendas.xlsx", **extra):
-    data = {"file": (buf, nome), **extra}
+    data = {"file": (buf, nome), "lancamento": "venda", **extra}
     return client.post("/comercializacao/novo", data=data, content_type="multipart/form-data")
 
 
@@ -130,11 +130,12 @@ def test_finalizar_cria_job_com_comandos(app, client):
     r = client.post(f"/comercializacao/{reg.id}/finalizar")
     assert r.status_code == 302
     job = ExecJob.query.one()
-    assert job.status == "ESPERA" and job.gta_source == "vendas"
-    assert job.commands[0] == "verificarRegistroVazio()" and job.commands[-1] == "finalizarRegistroComercializacao()"
+    assert job.status == "ESPERA" and job.gta_source == "venda"
+    assert job.commands[0] == 'verificarRegistroVazio("Venda", ["Venda"])' and job.commands[-1] == "finalizarRegistroComercializacao()"
     assert sum(c.startswith("incluirEstadoVenda") for c in job.commands) == 2
     assert sum(c.startswith("incluirProdutoVenda") for c in job.commands) == 5
     assert job.meta["modulo"] == "comercializacao" and job.meta["numero_sif"] == "167"
+    assert job.meta["lancamento"] == "venda" and job.gta_source == "venda"
     assert job.meta["periodo"] == {"ini": "01/03/2026", "fim": "31/03/2026"}
     assert db.session.get(Registro, reg.id).status == "PT"
 
@@ -220,3 +221,39 @@ def test_excluir_registro_comercializacao_e_conflito_com_abate(app, client):
     r = client.post(f"/registros/{reg.id}/excluir", data={"confirm": "yes"})
     assert r.status_code == 302 and "/comercializacao/" in r.headers["Location"]
     assert Registro.query.filter_by(tipo="comercializacao").count() == 0 and VendasTmp.query.count() == 0
+
+
+def test_tipo_sem_parser_e_conflito_por_tipo(app, client):
+    from app.models import TipoLancamento
+    _usuario()
+    _login(client)
+    db.session.add(TipoLancamento(codigo="recebimento", nome="Recebimento", rotulo_portal="Recebimento",
+                                  tipo_transacao_idx=2, ambito_idx=1, operador_idx=2))
+    db.session.commit()
+    html = client.get("/comercializacao/novo").get_data(as_text=True)
+    assert "Venda" in html and "Recebimento (layout ainda não suportado)" in html
+
+    r = _upload(client, xlsx_vendas(LINHAS_OK), lancamento="recebimento")
+    assert r.status_code == 400 and Registro.query.count() == 0
+
+    assert _upload(client, xlsx_vendas(LINHAS_OK)).status_code == 302
+    assert Registro.query.one().lancamento == "venda"
+    assert "venda" in client.get("/comercializacao/").get_data(as_text=True)
+
+
+def test_admin_tipos_lancamento(app, client):
+    from app.models import TipoLancamento
+    _usuario("adm", admin=True)
+    _login(client, "adm")
+    assert "venda" in client.get("/admin/constantes/tipos-lancamento").get_data(as_text=True)
+    ok = {"codigo": "Expedição", "nome": "Expedição", "rotulo_portal": "Expedição",
+          "tipo_transacao_idx": "3", "ambito_idx": "1", "operador_idx": "2", "ativo": "1"}
+    assert client.post("/admin/constantes/tipos-lancamento/novo", data=ok).status_code == 302
+    t = TipoLancamento.query.filter_by(codigo="expedicao").one()
+    assert (t.tipo_transacao_idx, t.rotulo_portal) == (3, "Expedição")
+    # indice invalido nao grava; codigo nao muda na edicao
+    assert client.post("/admin/constantes/tipos-lancamento/novo", data={**ok, "codigo": "x1", "ambito_idx": "0"}).status_code == 302
+    assert TipoLancamento.query.filter_by(codigo="x1").count() == 0
+    client.post(f"/admin/constantes/tipos-lancamento/{t.id}/editar", data={**ok, "codigo": "outro", "nome": "Saída"})
+    t = db.session.get(TipoLancamento, t.id)
+    assert (t.codigo, t.nome) == ("expedicao", "Saída")

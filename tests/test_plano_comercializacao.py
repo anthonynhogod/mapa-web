@@ -3,11 +3,14 @@ import pytest
 from app.extensions import db
 from app.logic import constantes
 from app.logic.comercializacao import (
-    FINALIZAR_CMD, LIMPAR_CMD, VERIFICAR_CMD, build_commands, build_plano, totais,
+    FINALIZAR_CMD, build_commands, build_plano, para_limpar, totais,
 )
 from app.logic.constantes import ColetorPendencias, ConstanteNaoMapeada
 from app.logic.js_literal import js_num, js_str
 from app.models import ProdutoVenda, ProdutoVendaAlias
+
+
+VENDA = {"rotulo": "Venda", "tipo_transacao_idx": 1, "ambito_idx": 1, "operador_idx": 2}
 
 
 def rec(produto, uf, q):
@@ -66,14 +69,24 @@ def test_comandos_ordem_hint_e_literais_seguros(app):
     db.session.commit()
     constantes.invalidar_cache()
     plano = build_plano([rec("BACON", "AL", 5), rec("BACON", "RS", 7)])
-    cmds = build_commands(plano)
-    assert cmds[0] == VERIFICAR_CMD and cmds[-1] == FINALIZAR_CMD
-    assert cmds[1] == 'incluirEstadoVenda("AL", 2)'
-    assert cmds[3] == 'incluirEstadoVenda("RS", 23)'
+    cmds = build_commands(plano, tipo=VENDA, rotulos=["Recebimento"])
+    assert cmds[0] == 'verificarRegistroVazio("Venda", ["Recebimento", "Venda"])' and cmds[-1] == FINALIZAR_CMD
+    cfg = '{"tipo": 1, "ambito": 1, "operador": 2, "rotulo": "Venda"}'
+    assert cmds[1] == f'incluirEstadoVenda("AL", 2, {cfg})'
+    assert cmds[3] == f'incluirEstadoVenda("RS", 23, {cfg})'
     assert cmds[4].startswith('incluirProdutoVenda("RS", 1, 7, ')            # dica = posicao do estado no plano
+    assert cmds[4].endswith(', 17189, "Venda")')
     assert "</script>" not in cmds[4] and "\\u003c/script\\u003e" in cmds[4]
     assert "d'água" in cmds[4] and '\\"especial\\"' in cmds[4]
-    assert build_commands(plano, limpar=True)[0] == LIMPAR_CMD
+    limpar = build_commands(plano, tipo=VENDA, limpar=True)[0]
+    assert limpar == 'limparTransacoes("Venda", ["Venda"])' == para_limpar(cmds[0].replace('"Recebimento", ', ''))
+
+
+def test_tipo_recebimento_usa_suas_opcoes(app):
+    rec_t = {"rotulo": "Recebimento", "tipo_transacao_idx": 2, "ambito_idx": 1, "operador_idx": 3}
+    cmds = build_commands(build_plano([rec("BACON", "RS", 7)]), tipo=rec_t, rotulos=["Venda", "Recebimento"])
+    assert '"tipo": 2' in cmds[1] and '"operador": 3' in cmds[1] and '"rotulo": "Recebimento"' in cmds[1]
+    assert cmds[2].endswith('"Recebimento")')
 
 
 def test_js_literal():

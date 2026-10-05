@@ -220,10 +220,10 @@ def retry_job(job_id):
     if limpar:
         # Comercializacao: reprocessar limpando as transacoes do portal antes de relancar
         # (o padrao e abortar se o registro do periodo ja tiver dados).
-        from app.logic.comercializacao import VERIFICAR_CMD, LIMPAR_CMD
+        from app.logic.comercializacao import VERIFICAR_FN, para_limpar
         cmds = list(job.commands or [])
-        if cmds and cmds[0] == VERIFICAR_CMD:
-            cmds[0] = LIMPAR_CMD
+        if cmds and cmds[0].startswith(VERIFICAR_FN + "("):
+            cmds[0] = para_limpar(cmds[0])
             job.commands = cmds
         else:
             flash(f"Job {job_id} nao e de comercializacao; 'limpar' ignorado.", "warning")

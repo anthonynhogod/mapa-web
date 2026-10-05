@@ -10,4 +10,6 @@
   <a class="btn btn--table {{ 'btn--primary' if chave == secao_atual else 'btn--outline' }}"
      href="{{ url_for('admin.constantes_secao', secao=chave) }}">{{ s.label }}</a>
   {% endfor %}
+  <a class="btn btn--table {{ 'btn--primary' if secao_atual == 'tipos-lancamento' else 'btn--outline' }}"
+     href="{{ url_for('admin.tipos_lancamento') }}">Tipos de lançamento</a>
 </div>

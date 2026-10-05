@@ -16,6 +16,7 @@ from app.models import (
     CondenaParte,
     ProdutoVenda, ProdutoVendaAlias,
     EstadoVenda, EstadoVendaAlias,
+    TipoLancamento,
 )
 from app.security import admin_required
 from app.utils.audit import log_action
@@ -101,6 +102,7 @@ def _secao(nome):
 
 def register(bp):
     """Registra as rotas de constantes no blueprint admin já existente."""
+    _registrar_tipos_lancamento(bp)
 
     # ------------------------------------------------------------------
     # Listagem
@@ -349,6 +351,68 @@ def register(bp):
                    meta={"nome": item.nome, "slots": slots})
         flash("Parte de condena atualizada.", "success")
         return redirect(url_for("admin.constantes_secao", secao="condenas"))
+
+
+def _registrar_tipos_lancamento(bp):
+    """CRUD dos tipos de lancamento da comercializacao (venda, recebimento, expedicao...)."""
+    import re as _re
+
+    @bp.route("/constantes/tipos-lancamento")
+    @admin_required
+    def tipos_lancamento():
+        itens = TipoLancamento.query.order_by(TipoLancamento.id).all()
+        return render_template("admin/constantes/tipos_lancamento.html",
+                               secoes=SECOES, secao_atual="tipos-lancamento", itens=itens, item=None)
+
+    @bp.route("/constantes/tipos-lancamento/novo", methods=["GET", "POST"])
+    @bp.route("/constantes/tipos-lancamento/<int:item_id>/editar", methods=["GET", "POST"])
+    @admin_required
+    def tipo_lancamento_form(item_id=None):
+        item = db.session.get(TipoLancamento, item_id) if item_id else None
+        if item_id and not item:
+            flash("Tipo de lançamento não encontrado.", "warning")
+            return redirect(url_for("admin.tipos_lancamento"))
+
+        if request.method == "POST":
+            codigo = normalize_str(request.form.get("codigo") or "").replace(" ", "")
+            nome = (request.form.get("nome") or "").strip()
+            rotulo = (request.form.get("rotulo_portal") or "").strip()
+            idx = {}
+            for campo in ("tipo_transacao_idx", "ambito_idx", "operador_idx"):
+                raw = (request.form.get(campo) or "").strip()
+                if not raw.isdigit() or int(raw) <= 0:
+                    flash("Os índices dos selects precisam ser inteiros maiores que zero.", "warning")
+                    return redirect(request.url)
+                idx[campo] = int(raw)
+            if item:
+                codigo = item.codigo          # o codigo identifica os registros existentes: nao muda
+            if not _re.fullmatch(r"[a-z0-9]{2,30}", codigo) or not nome or not rotulo:
+                flash("Informe código (letras/números), nome e rótulo do portal.", "warning")
+                return redirect(request.url)
+
+            novo = item is None
+            if novo:
+                item = TipoLancamento(codigo=codigo)
+                db.session.add(item)
+            item.nome, item.rotulo_portal = nome, rotulo
+            item.ativo = request.form.get("ativo") == "1"
+            item.obs = (request.form.get("obs") or "").strip() or None
+            for campo, valor in idx.items():
+                setattr(item, campo, valor)
+            try:
+                db.session.commit()
+            except IntegrityError:
+                db.session.rollback()
+                flash("Já existe um tipo com esse código.", "danger")
+                return redirect(request.url)
+            log_action(f"constante:{'create' if novo else 'update'}", entity="TipoLancamento",
+                       entity_id=item.id, meta={"codigo": item.codigo, **idx, "ativo": item.ativo})
+            flash("Tipo de lançamento salvo.", "success")
+            return redirect(url_for("admin.tipos_lancamento"))
+
+        return render_template("admin/constantes/tipos_lancamento.html",
+                               secoes=SECOES, secao_atual="tipos-lancamento", itens=None, item=item,
+                               novo=item is None)
 
 
 def _garantir_alias(cfg, item, nome):

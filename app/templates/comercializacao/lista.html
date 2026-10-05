@@ -12,11 +12,12 @@
 {% if registros %}
 <table class="tabela-registros">
   <thead>
-    <tr><th>Período</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
+    <tr><th>Tipo</th><th>Período</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
   </thead>
   <tbody>
     {% for r in registros %}
     <tr>
+      <td>{{ r.lancamento or 'venda' }}</td>
       <td>{{ r.periodo_label }}</td>
       <td>{{ r.obs or 'Sem Observações' }}</td>
       <td>{{ STATUS_LABELS.get(r.status, r.status) }}</td>

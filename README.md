@@ -34,7 +34,8 @@ O driver do Chrome é resolvido sozinho (Selenium Manager) quando `CHROMEDRIVER_
 
 Regras de negócio adotadas:
 
-- **Registro do período já tem estados no portal** → o job **aborta** com `[REGISTRO_COM_DADOS]`, sem alterar nada. Para reprocessar: Admin › Threads › **Retry (limpando portal)** (troca o 1º comando por `limparTransacoes()`).
+- **Tipos de lançamento** (Admin › Constantes › *Tipos de lançamento*): venda, recebimento e expedição dividem o **mesmo registro do período** no portal; muda a combinação de opções do formulário "Incluir estado" (índices dos selects) e o rótulo do tipo na tabela de transações. Só **venda** vem cadastrado (índices do fluxo legado); os demais são cadastrados no admin. Cada tipo precisa de um parser de planilha em `app/blueprints/comercializacao/parsers.py` (hoje só `venda`; os outros aparecem no upload como "layout ainda não suportado").
+- **Já existe lançamento do mesmo tipo no período** → o job **aborta** com `[REGISTRO_COM_DADOS]`, sem alterar nada (lançamentos de outros tipos não contam). Se o portal não mostrar o tipo na tabela, qualquer estado conta. Para reprocessar: Admin › Threads › **Retry (limpando portal)**, que remove só as transações do mesmo tipo (ou todas, se o tipo não for distinguível na tabela).
 - **Produtos diferentes que apontam para o mesmo item do portal** (ex.: LINGUIÇA TOSCANA e FRESCAL congeladas → 18152) são **lançados separadamente**, sem somar.
 - Linha repetida (mesmo produto e UF) na planilha é somada com aviso; quantidades são arredondadas a 2 casas; quantidade que arredonda para 0 é ignorada com aviso.
 - Estabelecimento: vem do **nº SIF das Credenciais MAPA** do usuário (antes estava fixo em `167`).

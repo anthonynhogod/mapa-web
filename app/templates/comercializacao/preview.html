@@ -3,7 +3,7 @@
 {% block main %}
 <div class="painel preview-panel">
   <h2 class="titulo-form" style="padding:12px; border-radius:10px;">
-    Preview — Comercialização {{ registro.periodo_label }}
+    Preview — Comercialização ({{ registro.lancamento or 'venda' }}) {{ registro.periodo_label }}
   </h2>
 
   <div class="mini-painel">

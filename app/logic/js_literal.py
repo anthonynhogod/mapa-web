@@ -27,3 +27,14 @@ def js_num(valor) -> str:
     if math.isnan(f) or math.isinf(f):
         raise ValueError(f"numero invalido: {valor!r}")
     return str(int(f)) if f == int(f) else repr(f)
+
+
+def js_json(valor) -> str:
+    """Objeto/lista Python -> literal JS (JSON valido, seguro p/ </script> e U+2028/9)."""
+    txt = json.dumps(valor, ensure_ascii=False, allow_nan=False)
+    return (
+        txt.replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("\u2028", "\\u2028")
+        .replace("\u2029", "\\u2029")
+    )

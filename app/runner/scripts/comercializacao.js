@@ -5,10 +5,12 @@
 //   findRegistroComercializacao(ini, fim)          -> "Nenhum registro encontrado." | msg | "OK"
 //   criarRegistroComercializacao(ini, fim, sif)    -> "OK: ..." | "OK: [MODO_INCLUIR] ..." | "Erro: ..."
 //   alterarRegistroAtivoComercializacao()
-//   verificarRegistroVazio()      aborta se o registro do período já tem estados
-//   limparTransacoes()            (retry "limpando portal")
-//   incluirEstadoVenda(uf, ufIndex)
-//   incluirProdutoVenda(uf, linhaHint, quantidade, descricao, idProduto)
+//   verificarRegistroVazio(rotulo, todosRotulos)  aborta se já há estado(s) do MESMO tipo
+//   limparTransacoes(rotulo, todosRotulos)        (retry "limpando portal"; só o mesmo tipo)
+//   incluirEstadoVenda(uf, ufIndex, cfgTipo)      cfgTipo = {tipo, ambito, operador, rotulo}
+//   incluirProdutoVenda(uf, linhaHint, quantidade, descricao, idProduto, rotulo)
+// Venda, recebimento e expedição dividem o registro do período: o "tipo" é a combinação de opções
+// do formulário "Incluir estado" e o rótulo exibido na tabela de transações.
 //   finalizarRegistroComercializacao()
 //
 // Melhorias sobre o legado (incluirEstado/selecionaEstado/incluirEmpresa/salvarRegistro):
@@ -91,12 +93,31 @@
     return achados;
   }
 
-  // Botão "incluir produto" da linha cuja UF bate (único), na página atual.
-  function botaoPorTexto(F, uf) {
-    const hits = tblButtons(F, BTN_PRODUTO).filter(b => {
+  // Qual dos rótulos conhecidos (tipo de lançamento) aparece na linha, ou null.
+  function tipoDaLinha(tr, rotulos) {
+    const alvos = (rotulos || []).map(S.norm).filter(Boolean);
+    if (!alvos.length || !tr) return null;
+    for (const td of tr.querySelectorAll("td")) {
+      const t = S.norm(td.innerText);
+      if (!t || t.length > 40) continue;
+      const hit = alvos.find(a => t === a || t.includes(a));
+      if (hit) return hit;
+    }
+    return null;
+  }
+
+  // Botão "incluir produto" da linha cuja UF bate (único), na página atual. Se a UF aparece em
+  // mais de uma linha (ex.: venda e recebimento para o mesmo estado), desempata pelo rótulo do tipo.
+  function botaoPorTexto(F, uf, rotulo) {
+    let hits = tblButtons(F, BTN_PRODUTO).filter(b => {
       const tr = b.closest("tr");
       return tr && ufsDaLinha(tr).has(uf);
     });
+    if (hits.length > 1 && rotulo) {
+      const meu = S.norm(rotulo);
+      const so = hits.filter(b => tipoDaLinha(b.closest("tr"), [rotulo]) === meu);
+      if (so.length) hits = so;
+    }
     return hits.length === 1 ? hits[0] : null;
   }
 
@@ -111,12 +132,34 @@
     return b;
   }
 
-  async function acharBotaoProduto(F, uf, hint) {
-    const procura = () => botaoPorTexto(F, uf) || botaoPorIndice(F, uf, hint);
+  async function acharBotaoProduto(F, uf, hint, rotulo) {
+    const procura = () => botaoPorTexto(F, uf, rotulo) || botaoPorIndice(F, uf, hint);
     return await S.searchPages(tabelaDe(F), procura);
   }
 
   const contarLinhas = (F) => tblButtons(F, BTN_PRODUTO).length;
+
+  // Percorre todas as páginas da tabela de transações e devolve as linhas (botão + tipo detectado).
+  // `discriminavel`: o portal mostra o tipo de algum lançamento na tabela (senão não dá p/ separar).
+  async function varrerTransacoes(F, todos) {
+    const linhas = [];
+    let discriminavel = false;
+    await S.pageTo(tabelaDe(F), "first");
+    for (let guard = 0; guard < 100; guard++) {
+      tblButtons(F, BTN_PRODUTO).forEach(b => {
+        const tr = b.closest("tr");
+        const tipo = tipoDaLinha(tr, todos);
+        if (tipo) discriminavel = true;
+        linhas.push({ tr, id: b.id, tipo });
+      });
+      if (!(await S.pageTo(tabelaDe(F), "next"))) break;
+    }
+    return { linhas, discriminavel };
+  }
+
+  // Linhas que pertencem ao tipo informado (todas, se o portal não mostra o tipo).
+  const doMesmoTipo = (r, rotulo) =>
+    r.discriminavel ? r.linhas.filter(l => l.tipo === S.norm(rotulo)) : r.linhas;
 
   // ---------------------------------------------------------------
   // Registro: localizar / criar / abrir para alteração
@@ -273,40 +316,42 @@
   // ---------------------------------------------------------------
   // Pré-checagem / limpeza
   // ---------------------------------------------------------------
-  window.verificarRegistroVazio = async function verificarRegistroVazio() {
+  window.verificarRegistroVazio = async function verificarRegistroVazio(rotulo, todosRotulos) {
     try {
       const F = formAtivo();
       if (!F) return exc("SEM_FORMULARIO", "nenhum formulário de comercialização aberto (Alterar/Incluir)");
       if (modoDe(F) === "Incluir") return ok("Registro novo (modo inclusão).");
-      const n = contarLinhas(F);
-      if (n > 0) {
-        const mais = S.paginatorBtn(tabelaDe(F)(), "next") ? "+" : "";
-        return `Erro: [REGISTRO_COM_DADOS] O registro do período já possui estado(s) lançado(s) no portal ` +
-          `(${n}${mais} na primeira página). Nada foi alterado. Limpe o registro no portal ou reprocesse ` +
-          `com "Retry (limpando portal)" em Admin > Threads.`;
+      const todos = (todosRotulos && todosRotulos.length ? todosRotulos : []).concat(rotulo ? [rotulo] : []);
+      const r = await varrerTransacoes(F, todos);
+      const meus = doMesmoTipo(r, rotulo);
+      if (meus.length > 0) {
+        const alvo = r.discriminavel ? `do tipo "${rotulo}"` : "(o portal não mostra o tipo; qualquer estado conta)";
+        return `Erro: [REGISTRO_COM_DADOS] O registro do período já possui ${meus.length} estado(s) ${alvo} lançado(s) no portal. ` +
+          `Nada foi alterado. Limpe no portal ou reprocesse com "Retry (limpando portal)" em Admin > Threads.`;
       }
-      return ok("Registro sem estados lançados.");
+      return ok(r.linhas.length ? `Sem estados do tipo "${rotulo}" (há ${r.linhas.length} de outros tipos).` : "Registro sem estados lançados.");
     } catch (e) {
       return exc("EXC_VERIFICAR_VAZIO", e);
     }
   };
 
-  // Remove todas as transações do registro (best effort: o id/diálogo de remoção não consta
-  // no legado; procura botões de remoção da tabela e confirma o diálogo, se houver).
-  window.limparTransacoes = async function limparTransacoes() {
+  // Remove as transações do tipo informado (todas, se o portal não mostra o tipo). Best effort: o id
+  // do botão de remover não consta no legado; procura botões de remoção da linha e confirma o diálogo.
+  window.limparTransacoes = async function limparTransacoes(rotulo, todosRotulos) {
     try {
       const F = formAtivo();
       if (!F) return exc("SEM_FORMULARIO", "nenhum formulário de comercialização aberto");
       if (modoDe(F) === "Incluir") return ok("Registro novo; nada a limpar.");
-      const REMOVE = `[id^="${esc(F)}:dtbTransacoes:"][id*=":commandEventRemove"], [id^="${esc(F)}:dtbTransacoes:"][id*=":commandRemove"], [id^="${esc(F)}:dtbTransacoes:"][id*=":commandDelete"]`;
+      const todos = (todosRotulos && todosRotulos.length ? todosRotulos : []).concat(rotulo ? [rotulo] : []);
+      const REMOVE = '[id*=":commandEventRemove"], [id*=":commandRemove"], [id*=":commandDelete"]';
       let removidas = 0;
       for (let guard = 0; guard < 200; guard++) {
-        await S.pageTo(tabelaDe(F), "first");
-        const b = document.querySelector(REMOVE);
-        if (!b) break;
+        const r = await varrerTransacoes(F, todos);
+        const alvo = doMesmoTipo(r, rotulo).find(l => l.tr.isConnected && l.tr.querySelector(REMOVE));
+        if (!alvo) break;
+        const btn = alvo.tr.querySelector(REMOVE);
         S.clearMessages();
-        await S.pf({ s: b.id, u: `mensagensValidacao ${F}:dtbTransacoes` }, "removerTransacao");
-        // possível diálogo de confirmação
+        await S.pf({ s: btn.id, u: `mensagensValidacao ${F}:dtbTransacoes` }, "removerTransacao");
         await S.sleep(200);
         const sim = Array.from(document.querySelectorAll(".ui-confirm-dialog button, .ui-confirmdialog-yes, .ui-dialog button"))
           .find(x => S.visible(x) && /^(sim|yes|confirmar|ok)$/i.test((x.innerText || "").trim()));
@@ -317,8 +362,9 @@
         if (err) return `Erro: [LIMPAR] ${err}`;
         removidas++;
       }
-      if (contarLinhas(F) > 0) {
-        return exc("LIMPAR_NAO_SUPORTADO", `restaram ${contarLinhas(F)} linha(s); não localizei o botão de remoção. Limpe o registro manualmente no portal.`);
+      const resto = doMesmoTipo(await varrerTransacoes(F, todos), rotulo).length;
+      if (resto > 0) {
+        return exc("LIMPAR_NAO_SUPORTADO", `restaram ${resto} linha(s); não localizei o botão de remoção. Limpe manualmente no portal.`);
       }
       return ok(`Transações removidas: ${removidas}.`);
     } catch (e) {
@@ -333,8 +379,10 @@
     try { const w = PF(widgetVar); return !!(w && w.jq && w.jq.is(":visible")); } catch (_) { return false; }
   }
 
-  window.incluirEstadoVenda = async function incluirEstadoVenda(uf, ufIndex) {
+  window.incluirEstadoVenda = async function incluirEstadoVenda(uf, ufIndex, cfgTipo) {
     try {
+      // opções do formulário "Incluir estado" por tipo de lançamento (default = venda)
+      const T = Object.assign({ tipo: CFG.tipoTransacao, ambito: CFG.ambito, operador: CFG.tipoOperador, rotulo: null }, cfgTipo || {});
       const F = formAtivo();
       if (!F) return exc("SEM_FORMULARIO", "nenhum formulário de comercialização aberto");
       S.clearMessages();
@@ -346,11 +394,11 @@
       await PF("dialogInsertTransacao").show();
 
       const sel = (id, tail) => ({ id, tail });
-      await S.selectAjax(sel("insertTransacao:frmDialog:tipoTransacao_input", "frmDialog:tipoTransacao_input"), { index: CFG.tipoTransacao });
+      await S.selectAjax(sel("insertTransacao:frmDialog:tipoTransacao_input", "frmDialog:tipoTransacao_input"), { texts: T.rotulo ? [T.rotulo] : [], index: T.tipo });
       await S.waitEl(sel("insertTransacao:frmDialog:ambito_input", "frmDialog:ambito_input"));
-      await S.selectAjax(sel("insertTransacao:frmDialog:ambito_input", "frmDialog:ambito_input"), { index: CFG.ambito });
+      await S.selectAjax(sel("insertTransacao:frmDialog:ambito_input", "frmDialog:ambito_input"), { index: T.ambito });
       await S.waitEl(sel("insertTransacao:frmDialog:tipoOperador_input", "frmDialog:tipoOperador_input"));
-      await S.selectAjax(sel("insertTransacao:frmDialog:tipoOperador_input", "frmDialog:tipoOperador_input"), { index: CFG.tipoOperador });
+      await S.selectAjax(sel("insertTransacao:frmDialog:tipoOperador_input", "frmDialog:tipoOperador_input"), { index: T.operador });
       await S.waitEl(sel("insertTransacao:frmDialog:uf_ufI:uf_ufI_input", "frmDialog:uf_ufI:uf_ufI_input"));
       // UF: pelo texto da opção (sigla/nome); o índice cadastrado no De->Para é o fallback
       await S.selectAjax(
@@ -402,14 +450,14 @@
     return true;
   }
 
-  window.incluirProdutoVenda = async function incluirProdutoVenda(uf, hint, quantidade, descricao, idProduto) {
+  window.incluirProdutoVenda = async function incluirProdutoVenda(uf, hint, quantidade, descricao, idProduto, rotulo) {
     try {
       const F = formAtivo();
       if (!F) return exc("SEM_FORMULARIO", "nenhum formulário de comercialização aberto");
       S.clearMessages();
 
       // 1) linha da UF (por texto; índice é só dica) -> abre o diálogo do produto
-      const btn = await acharBotaoProduto(F, uf, hint);
+      const btn = await acharBotaoProduto(F, uf, hint, rotulo);
       if (!btn) return `Erro: [UF_NAO_ENCONTRADA] linha da UF ${uf} não localizada na tabela de estados (dica de índice=${hint}).`;
       await S.pf({
         s: btn.id,

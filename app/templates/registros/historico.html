@@ -70,7 +70,7 @@
         <td>{{ r.periodo_label }}</td>
         <td><span class="chip {{ chip_map.get(r.status, 'chip--info') }}">{{ STATUS_LABELS.get(r.status, r.status)
             }}</span></td>
-        <td>{{ 'Comercialização' if r.is_comercializacao else r.especie }}</td>
+        <td>{{ r.tipo_label if r.is_comercializacao else r.especie }}</td>
         <td>{{ r.obs or '—' }}</td>
         <!-- Tempo de execução baseado em data_inicio e data_fim de Registro -->
         <td>

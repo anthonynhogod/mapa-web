@@ -87,3 +87,11 @@ PRODUTOS_VENDA = [
     ('TOUCINHO CONGELADO DE SUINO', 'toucinho congelado de suino', 18598),
     ('TOUCINHO RESFRIADO DE SUINO', 'TOUCINHO RESFRIADO DE SUÍNO', 18599),
 ]
+
+
+# codigo, nome, tipo_transacao_idx, ambito_idx, operador_idx, rotulo no portal
+# So "venda" vem pronto (indices do fluxo legado). Recebimento/expedicao sao cadastrados
+# em Admin > Constantes > Tipos de lancamento quando o layout for definido.
+TIPOS_LANCAMENTO = [
+    ('venda', 'Venda', 1, 1, 2, 'Venda'),
+]

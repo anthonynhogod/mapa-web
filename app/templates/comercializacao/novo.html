@@ -10,7 +10,14 @@
   {{ form.csrf_token }}
   <div class="form-completo">
     <div class="row grid-1">
-      <div class="sub-titulo-form">Planilha de vendas (.xlsx)</div>
+      <div class="sub-titulo-form">Planilha (.xlsx)</div>
+    </div>
+
+    <div class="row grid-1">
+      <div class="form-input">
+        <label for="lancamento" class="form-label">Tipo de lançamento:</label>
+        {{ form.lancamento(id="lancamento") }}
+      </div>
     </div>
 
     <div class="row grid-1">

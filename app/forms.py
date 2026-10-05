@@ -34,8 +34,9 @@ class UploadSifForm(UploadFileForm):
 class UploadVendasForm(FlaskForm):
     """Planilha de vendas (comercializacao). O periodo e lido do titulo da planilha;
     os campos de data so sao necessarios quando o titulo nao traz o periodo."""
+    lancamento = SelectField("Tipo de lançamento", choices=[])   # opcoes preenchidas na view
     file = FileField(
-        "Planilha de vendas",
+        "Planilha",
         validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")],
     )
     periodo_ini = StringField("Inicio do periodo (dd/mm/aaaa)", validators=[Optional()])

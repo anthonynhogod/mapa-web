@@ -48,6 +48,11 @@ def rodar(page, cmd):
     return page.evaluate("async (c) => await eval('window.' + c)", cmd)
 
 
+TODOS = '["Venda", "Recebimento", "Expedição"]'
+VENDA = '{tipo: 1, ambito: 1, operador: 2, rotulo: "Venda"}'
+RECEB = '{tipo: 2, ambito: 1, operador: 2, rotulo: "Recebimento"}'
+
+
 def estado(page):
     return page.evaluate("JSON.parse(JSON.stringify(window.__server))")
 
@@ -64,15 +69,15 @@ def test_fluxo_completo_com_paginacao(browser, ids):
     assert rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')").startswith("OK") \
         or True  # retorno pode ser msg vazia -> "OK"
     assert rodar(page, "alterarRegistroAtivoComercializacao()").startswith("OK")
-    assert rodar(page, "verificarRegistroVazio()").startswith("OK")
+    assert rodar(page, f'verificarRegistroVazio("Venda", {TODOS})').startswith("OK")
 
     esperado = {}
     for pos, uf in enumerate(UFS):
-        assert rodar(page, f'incluirEstadoVenda("{uf}", {pos + 1})').startswith("OK"), uf
+        assert rodar(page, f'incluirEstadoVenda("{uf}", {pos + 1}, {VENDA})').startswith("OK"), uf
         # dica de indice errada (0): a linha deve ser achada pelo TEXTO da UF
         for pid, q in ((17178, 100.5), (1717, 7.0), (18152, 3.25)):
             nome = {17178: "Apresuntado", 1717: "Apresuntado antigo", 18152: "Linguica frescal"}[pid]
-            r = rodar(page, f'incluirProdutoVenda("{uf}", 0, {q}, "{nome}", {pid})')
+            r = rodar(page, f'incluirProdutoVenda("{uf}", 0, {q}, "{nome}", {pid}, "Venda")')
             assert r.startswith("OK"), (uf, pid, r)
             esperado.setdefault(uf, []).append({"id": pid, "qtd": q})
     assert rodar(page, "finalizarRegistroComercializacao()").startswith("OK")
@@ -88,10 +93,10 @@ def test_fluxo_completo_com_paginacao(browser, ids):
 
 
 def test_registro_com_dados_aborta_sem_alterar(browser):
-    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[{uf: 'RS', produtos: []}]")
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[{uf: 'RS', tipo: 'Venda', produtos: []}]")
     rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
     assert rodar(page, "alterarRegistroAtivoComercializacao()").startswith("OK")
-    r = rodar(page, "verificarRegistroVazio()")
+    r = rodar(page, f'verificarRegistroVazio("Venda", {TODOS})')
     assert r.startswith("Erro: [REGISTRO_COM_DADOS]"), r
     assert [t["uf"] for t in estado(page)["registros"][0]["transacoes"]] == ["RS"]
     page.close()
@@ -118,8 +123,8 @@ def test_modo_incluir_quando_portal_exige_transacoes(browser):
     rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
     r = rodar(page, f"criarRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}', '167')")
     assert r.startswith("OK: [MODO_INCLUIR]"), r
-    assert rodar(page, "verificarRegistroVazio()").startswith("OK")
-    assert rodar(page, 'incluirEstadoVenda("RS", 23)').startswith("OK")
+    assert rodar(page, f'verificarRegistroVazio("Venda", {TODOS})').startswith("OK")
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})').startswith("OK")
     assert rodar(page, 'incluirProdutoVenda("RS", 0, 10, "Bacon", 17189)').startswith("OK")
     r = rodar(page, "finalizarRegistroComercializacao()")
     assert r.startswith("OK"), r
@@ -132,10 +137,10 @@ def test_erros_fecham_dialogos_e_nao_travam_o_proximo_comando(browser):
     page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
     rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
     rodar(page, "alterarRegistroAtivoComercializacao()")
-    assert rodar(page, 'incluirEstadoVenda("RS", 23)').startswith("OK")
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})').startswith("OK")
 
     # UF duplicada -> erro do portal, dialogo fechado
-    r = rodar(page, 'incluirEstadoVenda("RS", 23)')
+    r = rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})')
     assert r.startswith("Erro: [INCLUIR_ESTADO]"), r
     assert page.evaluate("document.querySelectorAll('.ui-dialog.open').length") == 0
 
@@ -161,9 +166,46 @@ def test_produto_casa_id_exato_e_busca_em_varias_paginas(browser):
     page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
     rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
     rodar(page, "alterarRegistroAtivoComercializacao()")
-    rodar(page, 'incluirEstadoVenda("SP", 26)')
+    rodar(page, f'incluirEstadoVenda("SP", 26, {VENDA})')
     assert rodar(page, 'incluirProdutoVenda("SP", 0, 1, "Apresuntado", 17178)').startswith("OK")
     assert rodar(page, 'incluirProdutoVenda("SP", 0, 2, "Residuos", 18538)').startswith("OK")
     prods = estado(page)["registros"][0]["transacoes"][0]["produtos"]
     assert [p["id"] for p in prods] == [17178, 18538]
+    page.close()
+
+
+def test_mesmo_registro_com_venda_e_recebimento(browser):
+    """Venda ja lancada em RS: recebimento NAO aborta, cria a propria linha de RS e os produtos
+    caem nela; reprocessar o mesmo tipo aborta; limpar remove so o mesmo tipo."""
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[{uf: 'RS', tipo: 'Venda', produtos: [{id: 1, qtd: 1}]}]")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+
+    assert rodar(page, f'verificarRegistroVazio("Venda", {TODOS})').startswith("Erro: [REGISTRO_COM_DADOS]")
+    r = rodar(page, f'verificarRegistroVazio("Recebimento", {TODOS})')
+    assert r.startswith("OK"), r
+
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {RECEB})').startswith("OK")
+    # dica de indice aponta para a linha da VENDA (0); o rotulo desempata para a de recebimento (1)
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 9, "Bacon", 17189, "Recebimento")')
+    assert r.startswith("OK"), r
+    t = estado(page)["registros"][0]["transacoes"]
+    assert [(x["uf"], x["tipo"], len(x["produtos"])) for x in t] == [("RS", "Venda", 1), ("RS", "Recebimento", 1)]
+    assert t[1]["produtos"] == [{"id": 17189, "qtd": 9}]
+
+    assert rodar(page, f'verificarRegistroVazio("Recebimento", {TODOS})').startswith("Erro: [REGISTRO_COM_DADOS]")
+    r = rodar(page, f'limparTransacoes("Recebimento", {TODOS})')
+    assert r.startswith("OK"), r
+    t = estado(page)["registros"][0]["transacoes"]
+    assert [(x["uf"], x["tipo"]) for x in t] == [("RS", "Venda")]      # a venda foi preservada
+    page.close()
+
+
+def test_incluir_estado_usa_opcoes_do_tipo(browser):
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    # rotulo inexistente nas opcoes: cai no indice configurado (3 = Expedição)
+    assert rodar(page, 'incluirEstadoVenda("SC", 24, {tipo: 3, ambito: 1, operador: 2, rotulo: "Saida X"})').startswith("OK")
+    assert estado(page)["registros"][0]["transacoes"][0]["tipo"] == "Expedição"
     page.close()

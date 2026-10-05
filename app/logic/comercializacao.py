@@ -10,14 +10,21 @@ from typing import Any, Dict, List, Optional
 from app.logic.constantes import (
     ColetorPendencias, resolve_estado_venda, resolve_produto_venda,
 )
-from app.logic.js_literal import js_num, js_str
+from app.logic.js_literal import js_json, js_num, js_str
 
-# Primeiro comando de todo job de comercializacao. Por padrao ABORTA se o registro
-# do periodo ja tiver transacoes (evita UF duplicada); no "limpar e relancar" ele
-# e trocado por LIMPAR_CMD.
-VERIFICAR_CMD = "verificarRegistroVazio()"
-LIMPAR_CMD = "limparTransacoes()"
+# Primeiro comando de todo job. Por padrao ABORTA se o registro do periodo ja tiver
+# transacoes do MESMO tipo de lancamento (venda/recebimento/expedicao dividem o registro);
+# no "limpar e relancar" ele e trocado por limparTransacoes(...) com os mesmos argumentos.
+VERIFICAR_FN = "verificarRegistroVazio"
+LIMPAR_FN = "limparTransacoes"
 FINALIZAR_CMD = "finalizarRegistroComercializacao()"
+
+
+def para_limpar(cmd: str) -> str:
+    """verificarRegistroVazio(...) -> limparTransacoes(...) (mesmos argumentos)."""
+    if not cmd.startswith(VERIFICAR_FN + "("):
+        raise ValueError("comando inicial inesperado")
+    return LIMPAR_FN + cmd[len(VERIFICAR_FN):]
 
 
 def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendencias] = None) -> List[Dict[str, Any]]:
@@ -47,15 +54,29 @@ def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendenci
     return sorted(por_uf.values(), key=lambda b: b["uf"])
 
 
-def build_commands(plano: List[Dict[str, Any]], *, limpar: bool = False) -> List[str]:
-    cmds: List[str] = [LIMPAR_CMD if limpar else VERIFICAR_CMD]
+def build_commands(plano: List[Dict[str, Any]], *, tipo: Dict[str, Any], rotulos: Optional[List[str]] = None,
+                   limpar: bool = False) -> List[str]:
+    """
+    `tipo`: {"rotulo", "tipo_transacao_idx", "ambito_idx", "operador_idx"} do TipoLancamento.
+    `rotulos`: rotulos de TODOS os tipos ativos (o JS os usa p/ distinguir as linhas da tabela
+    de transacoes e abortar/limpar so o que e do mesmo tipo).
+    """
+    rotulo = tipo["rotulo"]
+    todos = sorted(set((rotulos or []) + [rotulo]))
+    cfg = {
+        "tipo": int(tipo["tipo_transacao_idx"]),
+        "ambito": int(tipo["ambito_idx"]),
+        "operador": int(tipo["operador_idx"]),
+        "rotulo": rotulo,
+    }
+    cmds: List[str] = [f"{LIMPAR_FN if limpar else VERIFICAR_FN}({js_str(rotulo)}, {js_json(todos)})"]
     for pos, bloco in enumerate(plano):
-        cmds.append(f"incluirEstadoVenda({js_str(bloco['uf'])}, {js_num(bloco['index'])})")
+        cmds.append(f"incluirEstadoVenda({js_str(bloco['uf'])}, {js_num(bloco['index'])}, {js_json(cfg)})")
         for it in bloco["itens"]:
             cmds.append(
                 "incluirProdutoVenda("
                 f"{js_str(bloco['uf'])}, {js_num(pos)}, {js_num(it['quantidade'])}, "
-                f"{js_str(it['descricao'])}, {js_num(it['id'])})"
+                f"{js_str(it['descricao'])}, {js_num(it['id'])}, {js_str(rotulo)})"
             )
     cmds.append(FINALIZAR_CMD)
     return cmds
@@ -67,3 +88,17 @@ def totais(plano: List[Dict[str, Any]]) -> Dict[str, Any]:
         "itens": sum(len(b["itens"]) for b in plano),
         "quantidade": round(sum(i["quantidade"] for b in plano for i in b["itens"]), 2),
     }
+
+
+def tipo_config(t) -> Dict[str, Any]:
+    """TipoLancamento (ORM) -> dict usado por build_commands."""
+    return {
+        "codigo": t.codigo, "nome": t.nome, "rotulo": t.rotulo_portal,
+        "tipo_transacao_idx": t.tipo_transacao_idx, "ambito_idx": t.ambito_idx,
+        "operador_idx": t.operador_idx,
+    }
+
+
+def rotulos_ativos() -> List[str]:
+    from app.models import TipoLancamento
+    return [t.rotulo_portal for t in TipoLancamento.query.filter_by(ativo=True).all()]

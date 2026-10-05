@@ -10,14 +10,17 @@ from werkzeug.utils import secure_filename
 from app.executor.queue import get_queue
 from app.extensions import db
 from app.forms import UploadVendasForm
-from app.logic.comercializacao import build_commands, build_plano, totais as plano_totais
+from app.logic.comercializacao import (
+    build_commands, build_plano, rotulos_ativos, tipo_config, totais as plano_totais,
+)
 from app.logic.constantes import ColetorPendencias, ConstanteNaoMapeada
-from app.models import ExecJob, MapaCredencial, Registro, UploadStatus, VendasTmp
+from app.models import ExecJob, MapaCredencial, Registro, TipoLancamento, UploadStatus, VendasTmp
 from app.utils.audit import log_action
 from app.utils.format import normalize_str
 from app.utils.pagination import PER_PAGE, paginate_query, resolve_page
 
-from .parser import parse_data_br, validar_vendas
+from .parser import parse_data_br
+from .parsers import parser_para
 
 bp = Blueprint("comercializacao", __name__)
 
@@ -39,6 +42,21 @@ def _vendas_tmp(registro_id: int):
 def _payload(tmp):
     payload = (tmp.payload if tmp else None) or {}
     return payload.get("records", []), payload.get("meta", {"errors": [], "warnings": [], "counts": {}})
+
+
+def _tipos_ativos():
+    return TipoLancamento.query.filter_by(ativo=True).order_by(TipoLancamento.id).all()
+
+
+def _preencher_tipos(form):
+    form.lancamento.choices = [
+        (t.codigo, t.nome if parser_para(t.codigo) else f"{t.nome} (layout ainda não suportado)")
+        for t in _tipos_ativos()
+    ]
+
+
+def _tipo_do_registro(registro: Registro):
+    return TipoLancamento.query.filter_by(codigo=registro.lancamento or "venda", ativo=True).first()
 
 
 def _fmt_issue(it):
@@ -68,15 +86,22 @@ def lista():
 @login_required
 def novo():
     form = UploadVendasForm()
+    _preencher_tipos(form)
     if not form.validate_on_submit():
         if request.method == "POST":
             flash("Verifique o arquivo enviado (somente .xlsx).", "warning")
             return render_template("comercializacao/novo.html", form=form), 400
         return render_template("comercializacao/novo.html", form=form)
 
+    codigo = form.lancamento.data
+    validar = parser_para(codigo)
+    if validar is None:
+        flash("O layout de planilha deste tipo de lançamento ainda não é suportado.", "warning")
+        return render_template("comercializacao/novo.html", form=form), 400
+
     arquivo = form.file.data
-    filename = secure_filename(arquivo.filename or "") or "vendas.xlsx"
-    resultado = validar_vendas(arquivo.stream)
+    filename = secure_filename(arquivo.filename or "") or "planilha.xlsx"
+    resultado = validar(arquivo.stream)
     meta = resultado["meta"]
     erros = list(meta["errors"])
 
@@ -104,11 +129,11 @@ def novo():
     meta["periodo"] = {"ini": ini.isoformat(), "fim": fim.isoformat()}
 
     existente = Registro.query.filter_by(
-        user_id=current_user.id, tipo=TIPO, periodo_ini=ini, periodo_fim=fim
+        user_id=current_user.id, tipo=TIPO, periodo_ini=ini, periodo_fim=fim, lancamento=codigo
     ).first()
     if existente and existente.status != "AT":
         flash(
-            f"Ja existe um registro de comercializacao para {ini:%d/%m/%Y} a {fim:%d/%m/%Y} "
+            f"Ja existe um registro de comercializacao ({escape(codigo)}) para {ini:%d/%m/%Y} a {fim:%d/%m/%Y} "
             f"(status {escape(STATUS_LABELS.get(existente.status, existente.status))}). "
             "Exclua-o em Comercializacao > Registros para enviar uma nova planilha.",
             "danger",
@@ -116,7 +141,7 @@ def novo():
         return render_template("comercializacao/novo.html", form=form), 409
 
     registro = existente or Registro(
-        data=ini, periodo_ini=ini, periodo_fim=fim, tipo=TIPO, especie="suino",
+        data=ini, periodo_ini=ini, periodo_fim=fim, tipo=TIPO, lancamento=codigo, especie="suino",
         user_id=current_user.id, data_registro=datetime.now(),
     )
     registro.obs = (form.obs.data or "").strip() or registro.obs
@@ -129,7 +154,7 @@ def novo():
         tmp = VendasTmp(registro_id=registro.id, uploaded_by=current_user.id)
         db.session.add(tmp)
     tmp.filename = filename
-    tmp.model = "vendas"
+    tmp.model = codigo
     tmp.payload = resultado
     tmp.status = UploadStatus.VALIDATED
     try:
@@ -170,7 +195,11 @@ def preview(registro_id: int):
             voltar_url=url_for("comercializacao.preview", registro_id=registro.id),
         )
 
-    comandos = build_commands(plano)
+    tipo = _tipo_do_registro(registro)
+    if tipo is None:
+        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
+        return redirect(url_for("comercializacao.lista"))
+    comandos = build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos())
     return render_template(
         "comercializacao/preview.html",
         registro=registro, plano=plano, totais=plano_totais(plano), meta=meta,
@@ -217,13 +246,19 @@ def finalizar(registro_id: int):
         )
         return redirect(url_for("comercializacao.preview", registro_id=registro.id))
 
+    tipo = _tipo_do_registro(registro)
+    if tipo is None:
+        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
+        return redirect(url_for("comercializacao.lista"))
+
     job = ExecJob(
         registro_id=registro.id,
         owner_user_id=registro.user_id,
-        gta_source="vendas",
-        commands=build_commands(plano),
+        gta_source=tipo.codigo,
+        commands=build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos()),
         meta={
             "modulo": TIPO,
+            "lancamento": tipo.codigo,
             "periodo": {"ini": registro.periodo_ini.strftime("%d/%m/%Y"),
                         "fim": registro.periodo_fim.strftime("%d/%m/%Y")},
             "numero_sif": cred.numero_sif,

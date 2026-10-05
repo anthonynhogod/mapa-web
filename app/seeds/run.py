@@ -65,9 +65,14 @@ def seed_abate() -> int:
 
 
 def seed_comercializacao() -> int:
-    from app.models import ProdutoVenda, ProdutoVendaAlias, EstadoVenda, EstadoVendaAlias
-    from app.seeds.comercializacao_data import ESTADOS, PRODUTOS_VENDA
+    from app.models import ProdutoVenda, ProdutoVendaAlias, EstadoVenda, EstadoVendaAlias, TipoLancamento
+    from app.seeds.comercializacao_data import ESTADOS, PRODUTOS_VENDA, TIPOS_LANCAMENTO
     n = 0
+    for codigo, nome, t, a, o, rotulo in TIPOS_LANCAMENTO:
+        if not TipoLancamento.query.filter_by(codigo=codigo).first():
+            db.session.add(TipoLancamento(codigo=codigo, nome=nome, tipo_transacao_idx=t,
+                                          ambito_idx=a, operador_idx=o, rotulo_portal=rotulo))
+            n += 1
     for nome, descricao, id_mapa in PRODUTOS_VENDA:
         n += _upsert(ProdutoVenda, ProdutoVendaAlias, "produto_id", "nome", nome, [],
                      descricao_busca=descricao, id_mapa=id_mapa)
