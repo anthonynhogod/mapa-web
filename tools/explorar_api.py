@@ -44,8 +44,8 @@ def get(url: str, auth: str, timeout: int = 60):
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
-    except Exception as e:  # rede/TLS
-        return 0, str(e).encode()
+    except Exception as e:  # rede/TLS/DNS/proxy: devolve o MOTIVO (antes ficava escondido)
+        return 0, f"{type(e).__name__}: {e}".encode()
 
 
 def main() -> int:
@@ -68,12 +68,20 @@ def main() -> int:
         cand = basic(usuario, senha, md5=md5)
         st, corpo = get(f"{base}/especies", cand)
         print(f"auth {'md5' if md5 else 'senha crua'}: HTTP {st}")
+        if st == 0:
+            print(f"   motivo: {corpo.decode(errors='replace')}")
+            print("   -> falha ANTES de chegar ao MAPA (DNS/rede/proxy/certificado). Veja a dica no fim.")
+            break
         if st == 200:
             auth = cand
             print(f"-> usando senha {'em md5' if md5 else 'crua'}")
             break
     if auth is None:
         print("Nenhuma variante autenticou (403 = acesso negado; 0 = rede/TLS). Verifique usuario, perfil e ambiente.")
+        print(f"URL testada: {base}/especies")
+        print("Dicas se for erro de rede/certificado: abra a URL acima no navegador (deve pedir login/dar 401 ou 403,"
+              " nao 'site inacessivel'); teste fora da VPN/proxy da empresa; defina HTTPS_PROXY se a rede exigir; "
+              "se aparecer CERTIFICATE_VERIFY_FAILED, e a cadeia de certificados do gov.br: veja README (nao desative a verificacao).")
         return 1
 
     for nome in CATALOGOS:
