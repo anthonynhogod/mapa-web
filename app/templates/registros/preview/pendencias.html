@@ -32,7 +32,10 @@
         <tr>
           <td>
             {% set rotulos = {'diagnostico': 'Diagnóstico', 'parte': 'Parte afetada', 'destino': 'Destino',
-                              'produto_venda': 'Produto (vendas)', 'estado_venda': 'Estado (vendas)'} %}
+                              'produto_venda': 'Produto (vendas)', 'estado_venda': 'Estado (vendas)',
+                              'diagnostico_api': 'Diagnóstico sem ID da API', 'parte_api': 'Parte afetada sem ID da API',
+                              'destino_api': 'Destino sem ID da API', 'produto_api': 'Produto sem cod_produto da API',
+                              'especie_api': 'Espécie sem ID da API', 'credencial': 'Credenciais MAPA incompletas'} %}
             {{ rotulos.get(p.tipo, p.tipo) }}
           </td>
           <td><strong>{{ p.valor }}</strong></td>
@@ -40,10 +43,18 @@
           {% if current_user.is_admin %}
           <td class="acoes">
             {% set secoes_por_tipo = {'diagnostico': 'diagnosticos', 'parte': 'partes', 'destino': 'destinos',
-                                      'produto_venda': 'produtos-venda', 'estado_venda': 'estados-venda'} %}
+                                      'produto_venda': 'produtos-venda', 'estado_venda': 'estados-venda',
+                                      'diagnostico_api': 'diagnosticos', 'parte_api': 'partes', 'destino_api': 'destinos',
+                                      'produto_api': 'produtos-venda'} %}
             {% set secao = secoes_por_tipo.get(p.tipo, 'diagnosticos') %}
+            {% if p.tipo == 'especie_api' %}
+            <a class="btn btn--outline btn--table" href="{{ url_for('admin.api_mapa') }}">Informar ID</a>
+            {% elif p.tipo == 'credencial' %}
+            <a class="btn btn--outline btn--table" href="{{ url_for('public.credenciais_mapa') }}">Completar credenciais</a>
+            {% else %}
             <a class="btn btn--outline btn--table"
                href="{{ url_for('admin.constante_form', secao=secao) }}">Cadastrar vínculo</a>
+            {% endif %}
           </td>
           {% endif %}
         </tr>

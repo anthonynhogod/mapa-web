@@ -8,6 +8,12 @@ from app.models import ExecJob, MapaCredencial, ProdutoVenda, Registro, Role, Us
 from helpers import LINHAS_OK, xlsx_vendas
 
 
+@pytest.fixture(autouse=True)
+def _modo_navegador(app):
+    """Estes testes cobrem o fluxo legado (comandos JS); o modo API tem seus testes em test_api_*."""
+    app.config["EXEC_BACKEND"] = "browser"
+
+
 @pytest.fixture()
 def client(app):
     return app.test_client()
@@ -187,7 +193,7 @@ def test_admin_crud_produto_venda(app, client):
 
     # resolve na hora (cache invalidado)
     from app.logic.comercializacao import build_plano
-    assert build_plano([{"produto": "Salame Italiano", "uf": "RS", "quantidade": 1}])[0]["itens"][0]["id"] == 18543
+    assert build_plano([{"produto": "Salame Italiano", "uf": "RS", "quantidade": 1}], backend="browser")[0]["itens"][0]["id"] == 18543
 
     # campos obrigatorios
     r = client.post("/admin/constantes/produtos-venda/novo", data={"nome": "X", "id_mapa": "1", "ativo": "1"})
@@ -200,7 +206,7 @@ def test_admin_crud_produto_venda(app, client):
     client.post(f"/admin/constantes/produtos-venda/{novo.id}/editar", data={
         "nome": "SALAME ITALIANO", "descricao_busca": "Salame", "id_mapa": "99999", "ativo": "1"})
     client.post(f"/admin/constantes/produtos-venda/{novo.id}/alias", data={"alias": "Salame It."})
-    assert build_plano([{"produto": "SALAME IT", "uf": "RS", "quantidade": 1}])[0]["itens"][0]["id"] == 99999
+    assert build_plano([{"produto": "SALAME IT", "uf": "RS", "quantidade": 1}], backend="browser")[0]["itens"][0]["id"] == 99999
 
 
 def test_admin_exige_papel_admin(app, client):

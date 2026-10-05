@@ -112,7 +112,7 @@
                             <button type="submit"
                                 onclick="return confirm('Re-enfileirar este job FALHOU para ESPERA? O histórico de erros atual será limpo.')">Retry</button>
                         </form>
-                        {% if job.meta and job.meta.get('modulo') == 'comercializacao' %}
+                        {% if job.meta and job.meta.get('modulo') == 'comercializacao' and job.meta.get('backend') != 'api' %}
                         <form method="POST" action="{{ url_for('admin.retry_job', job_id=job.id) }}"
                             style="display:inline;">
                             <input type="hidden" name="limpar" value="1">
@@ -193,7 +193,7 @@
                 const retryBtn = job.status === 'FALHOU' ?
                     `<form method="POST" action="/admin/retry-job/${job.id}" style="display:inline;">
                         <button type="submit" onclick="return confirm('Re-enfileirar este job? O histórico de erros atual será limpo.')">Retry</button>
-                    </form>` + (job.modulo === 'comercializacao' ? `
+                    </form>` + (job.modulo === 'comercializacao' && job.backend !== 'api' ? `
                     <form method="POST" action="/admin/retry-job/${job.id}" style="display:inline;">
                         <input type="hidden" name="limpar" value="1">
                         <button type="submit" onclick="return confirm('Limpar TODAS as transações do registro no portal e relançar do zero?')">Retry (limpando portal)</button>

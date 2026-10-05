@@ -42,6 +42,12 @@ class MapaCredencial(db.Model):
     numero_sif = db.Column(db.String(20), nullable=False)
     especie = db.Column(db.String(50), nullable=False)
 
+    # Identificacao do estabelecimento exigida pelo webservice (manual PGA-SIGSIF v1.3)
+    cpf_cnpj = db.Column(db.String(14), nullable=True)            # 11 ou 14 digitos
+    ambito = db.Column(db.String(3), nullable=True)               # SIF | ER
+    cod_uf = db.Column(db.String(2), nullable=True)               # ex.: RS
+    cod_municipio_ibge = db.Column(db.String(7), nullable=True)   # 7 digitos
+
     created_at = db.Column(db.DateTime, nullable=False, server_default=func.now())
     updated_at = db.Column(db.DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -160,6 +166,8 @@ class Registro(db.Model):
     periodo_fim = db.Column(db.Date, nullable=True)
     # Comercializacao: codigo do tipo de lancamento (venda | recebimento | expedicao ...)
     lancamento = db.Column(db.String(30), nullable=True)
+    # id do mapa no webservice do MAPA (devolvido no POST); presente => reenvio usa PUT
+    api_id = db.Column(db.Integer, nullable=True)
 
     data_registro = db.Column(db.DateTime, nullable=False, server_default=func.now())
     data_inicio = db.Column(db.DateTime, nullable=True)
@@ -407,6 +415,7 @@ class Diagnostico(_ConstMixin, db.Model):
     __tablename__ = "diagnostico"
 
     descricao_mapa = db.Column(db.String(180), nullable=False, unique=True)
+    id_api = db.Column(db.Integer, nullable=True)   # id em GET /diagnosticos (webservice)
 
     aliases = relationship(
         "DiagnosticoAlias",
@@ -448,7 +457,8 @@ class ParteAfetada(_ConstMixin, db.Model):
     __tablename__ = "parte_afetada"
 
     nome = db.Column(db.String(120), nullable=False, unique=True)
-    id_mapa = db.Column(db.Integer, nullable=False)
+    id_mapa = db.Column(db.Integer, nullable=True)  # indice no select do portal (legado/navegador)
+    id_api = db.Column(db.Integer, nullable=True)   # id em GET /partes-afetadas (webservice)
 
     aliases = relationship(
         "ParteAfetadaAlias",
@@ -482,7 +492,8 @@ class Destino(_ConstMixin, db.Model):
     __tablename__ = "destino"
 
     nome = db.Column(db.String(120), nullable=False, unique=True)
-    id_mapa = db.Column(db.Integer, nullable=False)
+    id_mapa = db.Column(db.Integer, nullable=True)  # indice no select do portal (legado/navegador)
+    id_api = db.Column(db.Integer, nullable=True)   # id em GET /destino-condenacoes (webservice)
 
     aliases = relationship(
         "DestinoAlias",
@@ -542,7 +553,8 @@ class ProdutoVenda(_ConstMixin, db.Model):
 
     nome = db.Column(db.String(160), nullable=False, unique=True)
     descricao_busca = db.Column(db.String(180), nullable=False)
-    id_mapa = db.Column(db.Integer, nullable=False)
+    id_mapa = db.Column(db.Integer, nullable=True)   # id no portal (navegador/legado)
+    cod_api = db.Column(db.Integer, nullable=True)   # cod_produto em GET /produtos (webservice)
 
     aliases = relationship(
         "ProdutoVendaAlias",
@@ -616,10 +628,25 @@ class TipoLancamento(_ConstMixin, db.Model):
 
     codigo = db.Column(db.String(30), nullable=False, unique=True)          # 'venda'
     nome = db.Column(db.String(60), nullable=False)                        # exibicao
-    tipo_transacao_idx = db.Column(db.Integer, nullable=False)             # select "tipo de transacao"
-    ambito_idx = db.Column(db.Integer, nullable=False)                     # select "ambito"
-    operador_idx = db.Column(db.Integer, nullable=False)                   # select "tipo de operador"
+    tipo_transacao_idx = db.Column(db.Integer, nullable=True)              # legado (navegador): select "tipo de transacao"
+    ambito_idx = db.Column(db.Integer, nullable=True)                      # legado: select "ambito"
+    operador_idx = db.Column(db.Integer, nullable=True)                    # legado: select "tipo de operador"
     rotulo_portal = db.Column(db.String(60), nullable=False)               # texto do tipo no portal
+
+    # Webservice (transacao do mapa de comercializacao)
+    api_tipo = db.Column(db.String(10), nullable=False, server_default="VENDA")          # COMPRA | VENDA
+    api_nacional = db.Column(db.Boolean, nullable=False, server_default="1")             # transacao nacional?
+    api_tipo_operador = db.Column(db.String(40), nullable=False, server_default="UF")    # PAIS|UF|ESTABELECIMENTO_ESTRANGEIRO|
+                                                                                         # RECEBIMENTO_AUTORIZADO|ESTABELECIMENTO_POA|PRODUTOR
+    api_produto_tipo = db.Column(db.String(20), nullable=True)                           # COMPRA|PRODUCAO|PROPRIA|DEVOLUCAO (omitido se vazio)
 
     def __repr__(self):
         return f"<TipoLancamento {self.codigo!r} ({self.tipo_transacao_idx},{self.ambito_idx},{self.operador_idx})>"
+
+
+class EspecieApi(_ConstMixin, db.Model):
+    """Especie (ex.: 'suino') -> id em GET /especies, exigido no envio do mapa de abate."""
+    __tablename__ = "especie_api"
+
+    nome = db.Column(db.String(60), nullable=False, unique=True)
+    id_api = db.Column(db.Integer, nullable=True)

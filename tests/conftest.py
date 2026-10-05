@@ -19,6 +19,8 @@ def app():
     from app.extensions import db
     from app.seeds.run import seed_comercializacao
 
+    from app.logic.constantes import invalidar_cache
+    invalidar_cache()                  # cache de constantes e global ao processo: isola cada teste
     application = create_app()
     application.config.update(TESTING=True, WTF_CSRF_ENABLED=False)
     with application.app_context():
@@ -27,3 +29,4 @@ def app():
         yield application
         db.session.remove()
         db.drop_all()
+    invalidar_cache()

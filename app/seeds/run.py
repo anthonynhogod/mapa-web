@@ -66,13 +66,28 @@ def seed_abate() -> int:
 
 def seed_comercializacao() -> int:
     from app.models import ProdutoVenda, ProdutoVendaAlias, EstadoVenda, EstadoVendaAlias, TipoLancamento
-    from app.seeds.comercializacao_data import ESTADOS, PRODUTOS_VENDA, TIPOS_LANCAMENTO
+    from app.seeds.comercializacao_data import (
+        ESTADOS, PRODUTOS_VENDA, TIPOS_LANCAMENTO, TIPOS_LANCAMENTO_API, TIPOS_LANCAMENTO_EXTRAS,
+    )
     n = 0
     for codigo, nome, t, a, o, rotulo in TIPOS_LANCAMENTO:
         if not TipoLancamento.query.filter_by(codigo=codigo).first():
+            at, nac, op, pt = TIPOS_LANCAMENTO_API[codigo]
             db.session.add(TipoLancamento(codigo=codigo, nome=nome, tipo_transacao_idx=t,
-                                          ambito_idx=a, operador_idx=o, rotulo_portal=rotulo))
+                                          ambito_idx=a, operador_idx=o, rotulo_portal=rotulo,
+                                          api_tipo=at, api_nacional=nac, api_tipo_operador=op,
+                                          api_produto_tipo=pt))
             n += 1
+    for codigo, nome, rotulo, at, nac, op in TIPOS_LANCAMENTO_EXTRAS:
+        if not TipoLancamento.query.filter_by(codigo=codigo).first():
+            db.session.add(TipoLancamento(codigo=codigo, nome=nome, rotulo_portal=rotulo, api_tipo=at,
+                                          api_nacional=nac, api_tipo_operador=op, ativo=False,
+                                          obs="Sem layout de planilha ainda; ative quando houver parser."))
+            n += 1
+    from app.models import EspecieApi
+    if not EspecieApi.query.filter_by(nome="suino").first():
+        db.session.add(EspecieApi(nome="suino"))
+        n += 1
     for nome, descricao, id_mapa in PRODUTOS_VENDA:
         n += _upsert(ProdutoVenda, ProdutoVendaAlias, "produto_id", "nome", nome, [],
                      descricao_busca=descricao, id_mapa=id_mapa)

@@ -15,3 +15,13 @@ NAV_SPEED_PROFILE=ultra
 NAV_PROFILE=prod
 NAV_TAP_UI=never
 APP_ENV=dev
+
+# --- Execução: webservice do MAPA (padrão) ou navegador/Selenium (legado) ---
+EXEC_BACKEND=api
+# homologacao (padrão, ambiente de testes do MAPA) | producao (grava dados REAIS)
+MAPA_API_AMBIENTE=homologacao
+# MAPA_API_URL=            # sobrescreve a raiz dos serviços (proxy/testes)
+MAPA_API_MD5=1             # senha em md5 no Basic (manual v1.3, item 2.1)
+# Formato de data dos corpos: iso (yyyy-mm-dd) | br (dd/mm/aaaa)
+MAPA_API_DATA_COMERCIALIZACAO=iso
+MAPA_API_DATA_ABATE=br

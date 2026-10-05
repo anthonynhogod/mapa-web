@@ -36,6 +36,36 @@
     </div>
   </div>
 
+  {% if usa_api %}
+  <h3 class="sub-titulo-form" style="margin-top:16px;">Estabelecimento (webservice do MAPA — ambiente: {{ ambiente }})</h3>
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cpf_cnpj">CPF/CNPJ do estabelecimento</label>
+      <input id="cpf_cnpj" name="cpf_cnpj" type="text" required value="{{ cred.cpf_cnpj if cred and cred.cpf_cnpj else '' }}"
+        placeholder="11 ou 14 dígitos">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="ambito">Âmbito de inspeção</label>
+      <select id="ambito" name="ambito" required>
+        {% for a in ['SIF', 'ER'] %}<option value="{{ a }}" {{ 'selected' if cred and cred.ambito == a else '' }}>{{ a }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cod_uf">UF do estabelecimento</label>
+      <select id="cod_uf" name="cod_uf" required>
+        {% for u in ufs %}<option value="{{ u }}" {{ 'selected' if cred and cred.cod_uf == u else '' }}>{{ u }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="cod_municipio_ibge">Código IBGE do município</label>
+      <input id="cod_municipio_ibge" name="cod_municipio_ibge" type="text" required
+        value="{{ cred.cod_municipio_ibge if cred and cred.cod_municipio_ibge else '' }}" placeholder="7 dígitos">
+    </div>
+  </div>
+  {% endif %}
+
   <div class="form-actions">
     <button type="submit" class="btn">
       {{ 'Atualizar' if cred else 'Salvar credencial' }}
@@ -53,4 +83,16 @@
   </div>
   {% endif %}
 </form>
+
+{% if cred and usa_api %}
+<form method="POST" action="{{ url_for('.credenciais_mapa_testar') }}" style="margin-top:12px;">
+  <button type="submit" class="btn btn--outline">Testar conexão com o webservice ({{ ambiente }})</button>
+  {% if cred.validate_at %}
+  <span style="margin-left:8px;">
+    Último teste: {{ cred.validate_at.strftime('%d/%m/%Y %H:%M') }} —
+    {{ 'OK' if cred.validado else 'falhou' }}{% if cred.last_error %}: {{ cred.last_error }}{% endif %}
+  </span>
+  {% endif %}
+</form>
+{% endif %}
 {% endblock %}

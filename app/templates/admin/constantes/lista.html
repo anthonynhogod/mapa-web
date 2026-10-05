@@ -37,8 +37,8 @@
       <tr>
         <td>{{ it.id }}</td>
         <td>{{ it[cfg.campo_nome] }}</td>
-        {% for ex in cfg.extras or [] %}<td>{{ it[ex.campo] }}</td>{% endfor %}
-        {% if cfg.tem_id_mapa %}<td>{{ it.id_mapa }}</td>{% endif %}
+        {% for ex in cfg.extras or [] %}<td>{{ '' if it[ex.campo] is none else it[ex.campo] }}</td>{% endfor %}
+        {% if cfg.tem_id_mapa %}<td>{{ '' if it.id_mapa is none else it.id_mapa }}</td>{% endif %}
         <td>
           {% for a in it.aliases %}<span class="chip">{{ a.alias }}</span>{% endfor %}
         </td>

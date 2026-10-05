@@ -8,6 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.utils import secure_filename
 
 from app.executor.queue import get_queue
+from app.executor.service import create_api_job
+from app.mapa_api.montagem import json_legivel, preparar_comercializacao, usa_api
+from app.mapa_api.payloads import DadosIncompletos
 from app.extensions import db
 from app.forms import UploadVendasForm
 from app.logic.comercializacao import (
@@ -186,8 +189,25 @@ def preview(registro_id: int):
         flash("Nenhuma planilha de vendas valida para este registro. Envie uma planilha.", "warning")
         return redirect(url_for("comercializacao.novo"))
 
+    tipo = _tipo_do_registro(registro)
+    if tipo is None:
+        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
+        return redirect(url_for("comercializacao.lista"))
+
     coletor = ColetorPendencias()
-    plano = build_plano(records, coletor)
+    if usa_api():
+        try:
+            prep = preparar_comercializacao(registro, records, tipo, coletor)
+        except NotImplementedError as e:
+            flash(escape(str(e)), "warning")
+            return redirect(url_for("comercializacao.lista"))
+        plano = prep["plano"]
+        comandos = ([f"{prep['metodo']} /comercializacao  (Content-Type: application/json)"]
+                    + json_legivel(prep["payload"])) if prep["payload"] is not None else []
+    else:
+        plano = build_plano(records, coletor, backend="browser")
+        comandos = build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos()) if coletor.vazio else []
+
     if not coletor.vazio:
         return render_template(
             "registros/preview/pendencias.html",
@@ -195,15 +215,10 @@ def preview(registro_id: int):
             voltar_url=url_for("comercializacao.preview", registro_id=registro.id),
         )
 
-    tipo = _tipo_do_registro(registro)
-    if tipo is None:
-        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
-        return redirect(url_for("comercializacao.lista"))
-    comandos = build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos())
     return render_template(
         "comercializacao/preview.html",
         registro=registro, plano=plano, totais=plano_totais(plano), meta=meta,
-        comandos=comandos, tmp=tmp,
+        comandos=comandos, tmp=tmp, modo_api=usa_api(),
     )
 
 
@@ -235,39 +250,49 @@ def finalizar(registro_id: int):
         flash("Ja existe um job ativo para este registro.", "warning")
         return redirect(url_for("comercializacao.lista"))
 
+    tipo = _tipo_do_registro(registro)
+    if tipo is None:
+        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
+        return redirect(url_for("comercializacao.lista"))
+
+    extra = {
+        "modulo": TIPO,
+        "lancamento": tipo.codigo,
+        "periodo": {"ini": registro.periodo_ini.strftime("%d/%m/%Y"),
+                    "fim": registro.periodo_fim.strftime("%d/%m/%Y")},
+        "numero_sif": cred.numero_sif,
+    }
     try:
-        # ultima trava: sem coletor, qualquer termo sem vinculo aborta (nada vai ao portal cru)
-        plano = build_plano(records)
+        # ultima trava: sem coletor, qualquer termo sem vinculo (ou credencial incompleta) aborta
+        if usa_api():
+            prep = preparar_comercializacao(registro, records, tipo)
+            job = create_api_job(registro, prep, plano_totais(prep["plano"]), gta_source=tipo.codigo, extra_meta=extra)
+        else:
+            plano = build_plano(records, backend="browser")
+            job = ExecJob(
+                registro_id=registro.id, owner_user_id=registro.user_id, gta_source=tipo.codigo,
+                commands=build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos()),
+                meta={**extra, "totais": plano_totais(plano)}, status="ESPERA", progress=0, errors=[],
+            )
+            db.session.add(job)
+            registro.status = "PT"
     except ConstanteNaoMapeada as e:
+        db.session.rollback()
         flash(
             f"Nao foi possivel finalizar: {escape(e.tipo)} sem vinculo ({escape(e.valor)}). "
             "Cadastre o vinculo em Admin > Constantes e valide novamente.",
             "danger",
         )
         return redirect(url_for("comercializacao.preview", registro_id=registro.id))
-
-    tipo = _tipo_do_registro(registro)
-    if tipo is None:
-        flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
+    except DadosIncompletos as e:
+        db.session.rollback()
+        flash(f"{escape(str(e))}. Complete em Configurações > Credenciais MAPA.", "danger")
+        return redirect(url_for("comercializacao.preview", registro_id=registro.id))
+    except NotImplementedError as e:
+        db.session.rollback()
+        flash(escape(str(e)), "warning")
         return redirect(url_for("comercializacao.lista"))
 
-    job = ExecJob(
-        registro_id=registro.id,
-        owner_user_id=registro.user_id,
-        gta_source=tipo.codigo,
-        commands=build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos()),
-        meta={
-            "modulo": TIPO,
-            "lancamento": tipo.codigo,
-            "periodo": {"ini": registro.periodo_ini.strftime("%d/%m/%Y"),
-                        "fim": registro.periodo_fim.strftime("%d/%m/%Y")},
-            "numero_sif": cred.numero_sif,
-            "totais": plano_totais(plano),
-        },
-        status="ESPERA", progress=0, errors=[],
-    )
-    db.session.add(job)
-    registro.status = "PT"
     if tmp is not None:
         tmp.status = UploadStatus.PROCESSED
     db.session.commit()

@@ -50,7 +50,9 @@ class ColetorPendencias:
     def listar(self):
         """Pendências ordenadas por tipo e depois por valor."""
         ordem = {"diagnostico": 0, "parte": 1, "destino": 2,
-                 "produto_venda": 3, "estado_venda": 4}
+                 "produto_venda": 3, "estado_venda": 4,
+                 "diagnostico_api": 5, "parte_api": 6, "destino_api": 7, "produto_api": 8,
+                 "especie_api": 9, "credencial": 10}
         return sorted(
             self._itens.values(),
             key=lambda i: (ordem.get(i["tipo"], 9), i["valor"].lower()),
@@ -66,7 +68,8 @@ class ColetorPendencias:
 
 _lock = RLock()
 _cache = {"diagnostico": None, "parte": None, "destino": None, "condena": None,
-          "produto_venda": None, "estado_venda": None}
+          "produto_venda": None, "estado_venda": None,
+          "diagnostico_api": None, "parte_api": None, "destino_api": None, "especie_api": None}
 
 
 def invalidar_cache(tipo: str = None) -> None:
@@ -74,6 +77,8 @@ def invalidar_cache(tipo: str = None) -> None:
     with _lock:
         if tipo:
             _cache[tipo] = None
+            if f"{tipo}_api" in _cache:
+                _cache[f"{tipo}_api"] = None
         else:
             for k in _cache:
                 _cache[k] = None
@@ -203,14 +208,16 @@ def _mapa_produtos_venda():
                 db.session.query(
                     ProdutoVendaAlias.alias_norm,
                     ProdutoVenda.descricao_busca, ProdutoVenda.id_mapa, ProdutoVenda.nome,
+                    ProdutoVenda.cod_api,
                 )
                 .join(ProdutoVenda, ProdutoVendaAlias.produto_id == ProdutoVenda.id)
                 .filter(ProdutoVenda.ativo.is_(True))
                 .all()
             )
             _cache["produto_venda"] = {
-                norm: {"descricao": descr, "id": int(idm), "nome": nome}
-                for norm, descr, idm, nome in rows
+                norm: {"descricao": descr, "id": int(idm) if idm is not None else None,
+                       "nome": nome, "cod_api": int(cod) if cod is not None else None}
+                for norm, descr, idm, nome, cod in rows
             }
         return _cache["produto_venda"]
 
@@ -252,3 +259,67 @@ def resolve_estado_venda(uf: str, coletor: ColetorPendencias = None):
         coletor.registrar("estado_venda", uf)
         return None
     raise ConstanteNaoMapeada("estado_venda", uf)
+
+
+
+# ---------------------------------------------------------------------------
+# Webservice: ids da API (GET /diagnosticos, /partes-afetadas, /destino-condenacoes, /especies)
+# ---------------------------------------------------------------------------
+
+def _mapa_id_api(tipo: str):
+    """{alias_norm: id_api|None} das constantes ativas. None = existe o vinculo, falta o id da API."""
+    with _lock:
+        chave = f"{tipo}_api"
+        if _cache[chave] is None:
+            from app.extensions import db
+            from app import models as m
+            if tipo == "diagnostico":
+                q = db.session.query(m.DiagnosticoAlias.alias_norm, m.Diagnostico.id_api).join(
+                    m.Diagnostico, m.DiagnosticoAlias.diagnostico_id == m.Diagnostico.id
+                ).filter(m.Diagnostico.ativo.is_(True))
+            elif tipo == "parte":
+                q = db.session.query(m.ParteAfetadaAlias.alias_norm, m.ParteAfetada.id_api).join(
+                    m.ParteAfetada, m.ParteAfetadaAlias.parte_id == m.ParteAfetada.id
+                ).filter(m.ParteAfetada.ativo.is_(True))
+            elif tipo == "destino":
+                q = db.session.query(m.DestinoAlias.alias_norm, m.Destino.id_api).join(
+                    m.Destino, m.DestinoAlias.destino_id == m.Destino.id
+                ).filter(m.Destino.ativo.is_(True))
+            else:  # especie
+                q = db.session.query(m.EspecieApi.nome, m.EspecieApi.id_api).filter(m.EspecieApi.ativo.is_(True))
+                _cache[chave] = {normalize_str(n): (int(i) if i is not None else None) for n, i in q.all()}
+                return _cache[chave]
+            _cache[chave] = {n: (int(i) if i is not None else None) for n, i in q.all()}
+        return _cache[chave]
+
+
+def _resolve_api(tipo: str, nome: str, coletor: ColetorPendencias = None):
+    """id da API, ou None com pendencia (sem coletor, levanta). Distingue 'sem vinculo' de 'sem id da API'."""
+    mapa = _mapa_id_api(tipo)
+    chave = normalize_str(nome or "")
+    if chave in mapa:
+        if mapa[chave] is not None:
+            return mapa[chave]
+        tipo_pend = f"{tipo}_api"
+    else:
+        tipo_pend = tipo if tipo != "especie" else "especie_api"
+    if coletor is not None:
+        coletor.registrar(tipo_pend, nome)
+        return None
+    raise ConstanteNaoMapeada(tipo_pend, nome)
+
+
+def resolve_diagnostico_api(nome, coletor=None):
+    return _resolve_api("diagnostico", nome, coletor)
+
+
+def resolve_parte_api(nome, coletor=None):
+    return _resolve_api("parte", nome, coletor)
+
+
+def resolve_destino_api(nome, coletor=None):
+    return _resolve_api("destino", nome, coletor)
+
+
+def resolve_especie_api(nome, coletor=None):
+    return _resolve_api("especie", nome, coletor)

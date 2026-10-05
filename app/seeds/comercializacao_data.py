@@ -95,3 +95,17 @@ PRODUTOS_VENDA = [
 TIPOS_LANCAMENTO = [
     ('venda', 'Venda', 1, 1, 2, 'Venda'),
 ]
+
+
+# Campos do webservice por tipo (codigo -> api_tipo, api_nacional, api_tipo_operador, api_produto_tipo).
+# O tipo do produto (COMPRA/PRODUCAO/PROPRIA/DEVOLUCAO) fica vazio: no portal nunca foi preenchido.
+TIPOS_LANCAMENTO_API = {
+    'venda': ('VENDA', True, 'UF', None),
+}
+
+# Tipos ainda sem layout de planilha: nascem INATIVOS, prontos para ativar quando o parser existir.
+# codigo, nome, rotulo no portal, api_tipo, nacional, tipo_operador
+TIPOS_LANCAMENTO_EXTRAS = [
+    ('recebimento_autorizado', 'Recebimento (estabelecimento autorizado)', 'Recebimento', 'COMPRA', True, 'RECEBIMENTO_AUTORIZADO'),
+    ('recebimento_poa', 'Recebimento (outra empresa com SIF)', 'Recebimento', 'COMPRA', True, 'ESTABELECIMENTO_POA'),
+]

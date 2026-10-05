@@ -18,6 +18,9 @@ from app.logic.preview_utils import (
 )
 
 from app.utils.format import normalize_str
+from markupsafe import escape
+from app.mapa_api.montagem import json_legivel, preparar_abate, usa_api
+from app.mapa_api.payloads import DadosIncompletos
 # >>> Service sem importar nada de 'routes':
 from app.executor.service import create_job_and_finalize
 
@@ -348,14 +351,19 @@ def preview_registro(registro_id):
     # 3) Preview final (gera comandos)
     from app.logic.constantes import ColetorPendencias
 
-    merged_diag = _merge_diagnostics(dif_records, sif_records)
-    estrutura_lotes = _build_legacy_structure_from_new(gta_records, merged_diag, uf_index_default=23)
-
     # Constantes sem vínculo cadastrado BLOQUEIAM o registro. Nada é enviado ao
-    # portal "no melhor esforço": ou todo diagnóstico/parte/destino tem vínculo,
-    # ou o dia não é válido.
+    # MAPA "no melhor esforço": ou todo diagnóstico/parte/destino/espécie tem vínculo
+    # (e o estabelecimento está completo), ou o dia não é válido.
     coletor = ColetorPendencias()
-    comandos = _build_commands(estrutura_lotes, coletor=coletor)
+    avisos_api = []
+    if usa_api():
+        prep = preparar_abate(registro, gta_records, dif_records, sif_records, coletor)
+        comandos = [f"{prep['metodo']} /abate  (Content-Type: application/json)"] + json_legivel(prep["payload"])
+        avisos_api = prep["avisos"]
+    else:
+        merged_diag = _merge_diagnostics(dif_records, sif_records)
+        estrutura_lotes = _build_legacy_structure_from_new(gta_records, merged_diag, uf_index_default=23)
+        comandos = _build_commands(estrutura_lotes, coletor=coletor)
 
     if not coletor.vazio:
         return render_template(
@@ -382,6 +390,8 @@ def preview_registro(registro_id):
         mismatch=mismatch,
         comandos=comandos,
         diff=diff,  # sempre definido
+        modo_api=usa_api(),
+        avisos_api=avisos_api,
     )
 
 
@@ -595,10 +605,14 @@ def finalizar_validacao(registro_id: int):
     except ConstanteNaoMapeada as e:
         db.session.rollback()
         flash(
-            f"Não foi possível finalizar: {e.tipo} sem vínculo no sistema do MAPA "
-            f"({e.valor}). Cadastre o vínculo em Admin > Constantes e valide novamente.",
+            f"Não foi possível finalizar: {escape(e.tipo)} sem vínculo no sistema do MAPA "
+            f"({escape(e.valor)}). Cadastre o vínculo em Admin > Constantes e valide novamente.",
             "danger",
         )
+        return redirect(url_for("registros.preview_registro", registro_id=registro.id))
+    except DadosIncompletos as e:
+        db.session.rollback()
+        flash(f"{escape(str(e))}. Complete em Configurações > Credenciais MAPA.", "danger")
         return redirect(url_for("registros.preview_registro", registro_id=registro.id))
 
     # Enfileira para os workers

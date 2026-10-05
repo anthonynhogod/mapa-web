@@ -45,6 +45,18 @@ class BaseConfig:
     NAV_MODE = os.getenv("NAV_MODE", "HIDE")
     NAV_SPEED_PROFILE = os.getenv("NAV_SPEED_PROFILE", "balanced")
     NAV_TAP_UI = os.getenv("NAV_TAP_UI", "auto")
+    # Execucao dos lancamentos: "api" (webservice do MAPA) | "browser" (Selenium, legado)
+    EXEC_BACKEND = os.getenv("EXEC_BACKEND", "api").strip().lower()
+    # Webservice PGA-SIGSIF. Padrao = HOMOLOGACAO; producao so com MAPA_API_AMBIENTE=producao.
+    MAPA_API_AMBIENTE = os.getenv("MAPA_API_AMBIENTE", "homologacao").strip().lower()
+    MAPA_API_URL = os.getenv("MAPA_API_URL") or None          # sobrescreve a raiz (testes/proxy)
+    MAPA_API_MD5 = _to_bool(os.getenv("MAPA_API_MD5", "1"), True)   # senha em md5 no Basic (manual 2.1)
+    MAPA_API_TIMEOUT = float(os.getenv("MAPA_API_TIMEOUT", "60"))
+    # Formato de data dos corpos: 'iso' (yyyy-mm-dd) ou 'br' (dd/mm/aaaa). O swagger da
+    # comercializacao usa ISO; a tabela de parametros do abate usa dd/mm/aaaa.
+    MAPA_API_DATA_COMERCIALIZACAO = os.getenv("MAPA_API_DATA_COMERCIALIZACAO", "iso")
+    MAPA_API_DATA_ABATE = os.getenv("MAPA_API_DATA_ABATE", "br")
+
     # CORS (mesma configuração atual)
     CORS_RESOURCES = {r"/api/*": {"origins": "*"}}
 

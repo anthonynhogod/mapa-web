@@ -7,7 +7,22 @@ Automação de lançamentos no PGA-SIGSIF (MAPA), com dois módulos no mesmo sis
 | **Abate** | GTA + DIF + SIF (upload ou manual) | um dia de abate por registro |
 | **Comercialização** | planilha de vendas (`.xlsx`) | um período (mês) por registro, **por estado (UF)** |
 
-Fluxo comum: upload → validação → preview (pendências de De→Para bloqueiam) → `ExecJob` → worker (Selenium) executa os comandos JS no portal.
+Fluxo comum: upload → validação → preview (pendências de De→Para bloqueiam) → `ExecJob` → worker envia ao MAPA.
+
+**Execução (`EXEC_BACKEND`)**
+- `api` (padrão): envio pelo **webservice REST do PGA-SIGSIF** (manual v1.3), sem navegador. O ambiente padrão é **homologação** (`MAPA_API_AMBIENTE=homologacao`); produção só com `producao` explícito.
+- `browser`: Selenium + scripts JS (legado, mantido até o envio por API ser validado em homologação).
+
+### Webservice (modo `api`)
+
+1. **Credenciais MAPA** (Configurações): além de usuário/senha/SIF, informe CPF/CNPJ, âmbito (SIF/ER), UF e IBGE do estabelecimento. Botão **Testar conexão** (`GET /especies`).
+2. **Admin › API do MAPA**: mostra o ambiente, baixa os catálogos (`/especies`, `/diagnosticos`, `/partes-afetadas`, `/destino-condenacoes`, `/paises`, `/produtos`) e **sincroniza** os ids da API com o De→Para (só preenche vazios e só quando o nome casa de forma inequívoca; nunca sobrescreve).
+   - Ids da API ficam em: Diagnósticos/Partes/Destinos (`ID na API`), Produtos (vendas) (`cod_produto na API`) e Espécies. Sem id = **pendência** que bloqueia o preview.
+   - Alternativa por linha de comando: `python tools/explorar_api.py` (somente leitura).
+3. **Preview** mostra o JSON exato que será enviado (aba *Comandos*). Abate: lista de linhas planas (GTA × lote × diagnóstico × parte × destino). Comercialização: `{data_inicio, data_fim, estabelecimento, transacoes[{tipo, nacional, tipo_operador, cod_uf, produtos[{cod_produto, quantidade}]}]}`.
+4. O worker faz `POST` e guarda o `id` devolvido em `registro.api_id`; reenviar o mesmo registro faz `PUT` com esse id. **POST/PUT nunca são repetidos automaticamente**; um timeout em POST marca o job como *resultado desconhecido* (confira no portal antes de reenviar).
+
+**Pontos a confirmar em homologação** (o manual não os define): formato do corpo do `POST /abate` (assumi lista de linhas planas); tipo do produto (`COMPRA/PRODUCAO/PROPRIA/DEVOLUCAO`, hoje omitido) e campo `estoque`; série da GTA com 1 letra (o sistema só avisa); formato de data; se enviar outro *tipo de lançamento* do mesmo período (venda × recebimento) soma ou substitui no mapa existente.
 
 ## Instalação
 
@@ -40,6 +55,8 @@ Regras de negócio adotadas:
 - Linha repetida (mesmo produto e UF) na planilha é somada com aviso; quantidades são arredondadas a 2 casas; quantidade que arredonda para 0 é ignorada com aviso.
 - Estabelecimento: vem do **nº SIF das Credenciais MAPA** do usuário (antes estava fixo em `167`).
 
+Tipos de lançamento e a API: `venda` = `tipo VENDA` + `nacional true` + `tipo_operador UF`. Os dois recebimentos já estão cadastrados **inativos** (`recebimento_autorizado` = COMPRA + `RECEBIMENTO_AUTORIZADO`; `recebimento_poa` = COMPRA + `ESTABELECIMENTO_POA`) até existir o layout de planilha de cada um.
+
 ### De → Para (Admin › Constantes)
 
 - **Produtos (vendas)**: nome na planilha → descrição usada na busca do portal + ID do produto (+ apelidos de grafia).
@@ -47,7 +64,7 @@ Regras de negócio adotadas:
 
 Os dados iniciais vêm do `constantes.py` legado (migration `c0a1e7b5d3f2` / `flask init-db`). A comparação ignora acento/caixa/pontuação; sem vínculo = pendência (sem "chute").
 
-## Scripts JS (`app/runner/scripts/`)
+## Scripts JS — modo `browser` (`app/runner/scripts/`)
 
 - `core.js` — helpers comuns. Resolve elementos pela parte **estável** do id (sufixo / dentro do diálogo visível); o id `j_idt…` antigo é só fallback. `pf()` com timeout, paginação de DataTable, leitura de erro de UI por severidade, fechamento de diálogos após falha.
 - `scripts.js` — Abate (mesmas funções/retornos de antes, agora sobre o `core.js`).

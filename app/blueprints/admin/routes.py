@@ -14,6 +14,10 @@ bp = Blueprint("admin", __name__)
 from app.blueprints.admin.constantes import register as _register_constantes
 _register_constantes(bp)
 
+# Admin > API do MAPA (webservice): catalogos e sincronizacao do De->Para
+from app.blueprints.admin.api_mapa import register as _register_api_mapa
+_register_api_mapa(bp)
+
 @bp.route("/")
 @admin_required
 def index():
@@ -226,7 +230,10 @@ def retry_job(job_id):
             cmds[0] = para_limpar(cmds[0])
             job.commands = cmds
         else:
-            flash(f"Job {job_id} nao e de comercializacao; 'limpar' ignorado.", "warning")
+            flash(f"Job {job_id}: 'limpar portal' só vale para o modo navegador; ignorado.", "warning")
+    if (job.meta or {}).get("incerto"):
+        flash(f"Job {job_id}: o resultado do envio anterior é DESCONHECIDO. Se o mapa já foi gravado no "
+              "MAPA, o reenvio pode duplicá-lo (POST).", "warning")
     job.status = "ESPERA"
     registro: Registro = db.session.get(Registro, job.registro_id)
     registro.status = "PT"
@@ -255,6 +262,7 @@ def api_pending_jobs():
             "id": job.id,
             "status": job.status,
             "modulo": (job.meta or {}).get("modulo", "abate"),
+            "backend": (job.meta or {}).get("backend", "browser"),
             "errors": job.errors or [],
             "progress": progress_percent,
             "started_at": job.started_at.isoformat() if job.started_at else None,

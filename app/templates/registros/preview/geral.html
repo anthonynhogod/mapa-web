@@ -138,7 +138,9 @@
       <div class="alert" style="margin-bottom: 12px;">
         <div class="alert__icon">🧭</div>
         <div class="alert__content">
-          Plano de execução no navegador (Selenium). Ajuste os mapeamentos de índices e constantes conforme necessário.
+          {% if modo_api %}Requisição enviada ao webservice do MAPA (JSON). Confira antes de confirmar.
+          {% else %}Plano de execução no navegador (Selenium). Ajuste os mapeamentos de índices e constantes conforme necessário.{% endif %}
+          {% for a in avisos_api or [] %}<div class="msg-erro" style="margin-top:6px;">Aviso: {{ a }}</div>{% endfor %}
         </div>
       </div>
       <div class="table-scroll">

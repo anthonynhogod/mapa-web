@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from app.logic.constantes import (
-    ColetorPendencias, resolve_estado_venda, resolve_produto_venda,
+    ColetorPendencias, ConstanteNaoMapeada, resolve_estado_venda, resolve_produto_venda,
 )
 from app.logic.js_literal import js_json, js_num, js_str
 
@@ -27,13 +27,16 @@ def para_limpar(cmd: str) -> str:
     return LIMPAR_FN + cmd[len(VERIFICAR_FN):]
 
 
-def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendencias] = None) -> List[Dict[str, Any]]:
+def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendencias] = None,
+                backend: str = "api") -> List[Dict[str, Any]]:
     """
     [{"uf": "RS", "index": 23, "itens": [{"produto", "descricao", "id", "quantidade"}]}]
 
     Ordenado por UF; dentro da UF, por produto. Produtos diferentes que apontam para o
     mesmo id do portal sao lancados separados (o MAPA aceita). Termo sem vinculo vira
     pendencia (com coletor) ou ConstanteNaoMapeada (sem coletor).
+
+    `backend="api"` exige o cod_produto do webservice; "browser" (legado) exige o id do portal.
     """
     por_uf: Dict[str, Dict[str, Any]] = {}
     for r in sorted(records or [], key=lambda r: (str(r.get("uf", "")).upper(), str(r.get("produto", "")))):
@@ -41,6 +44,16 @@ def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendenci
         prod = resolve_produto_venda(r.get("produto", ""), coletor)
         if est is None or prod is None:
             continue  # pendencia ja registrada; nada vai ao portal
+        if backend == "api" and prod.get("cod_api") is None:
+            if coletor is None:
+                raise ConstanteNaoMapeada("produto_api", r.get("produto", ""))
+            coletor.registrar("produto_api", r.get("produto", ""))
+            continue
+        if backend != "api" and prod.get("id") is None:
+            if coletor is None:
+                raise ConstanteNaoMapeada("produto_venda", r.get("produto", ""))
+            coletor.registrar("produto_venda", r.get("produto", ""))
+            continue
         qtd = round(float(r.get("quantidade") or 0), 2)
         if qtd <= 0:
             continue
@@ -49,6 +62,7 @@ def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendenci
             "produto": r.get("produto"),
             "descricao": prod["descricao"],
             "id": prod["id"],
+            "cod_api": prod.get("cod_api"),
             "quantidade": qtd,
         })
     return sorted(por_uf.values(), key=lambda b: b["uf"])

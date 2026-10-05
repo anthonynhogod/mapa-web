@@ -26,7 +26,8 @@
     <div class="alert__content">
       Arquivo: <strong>{{ tmp.filename }}</strong>
       {% if meta.empresa %}— {{ meta.empresa }}{% endif %}.
-      Se o registro do período já tiver estados lançados no portal, a execução é abortada sem alterar nada.
+      {% if modo_api %}O envio vai pelo webservice do MAPA (aba “Comandos” mostra o JSON). Se este registro já foi enviado, o reenvio atualiza (PUT) o mapa existente.
+      {% else %}Se o registro do período já tiver estados lançados no portal, a execução é abortada sem alterar nada.{% endif %}
       {% for w in meta.warnings %}
       <div class="msg-erro" style="margin-top:6px;">Aviso: {{ w.where }} — {{ w.message }}</div>
       {% endfor %}

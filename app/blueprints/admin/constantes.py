@@ -35,6 +35,10 @@ SECOES = {
         "tem_id_mapa": False,
         "cache": "diagnostico",
         "singular": "Diagnóstico",
+        "extras": [
+            {"campo": "id_api", "rotulo": "ID na API (GET /diagnosticos)", "numerico": True, "opcional": True,
+             "ajuda": "Preenchido por “Sincronizar catálogos” em Admin > API do MAPA, ou à mão."},
+        ],
     },
     "partes": {
         "label": "Partes Afetadas",
@@ -43,8 +47,13 @@ SECOES = {
         "alias_fk": "parte_id",
         "campo_nome": "nome",
         "tem_id_mapa": True,
+        "id_mapa_opcional": True,
         "cache": "parte",
         "singular": "Parte afetada",
+        "rotulo_id_mapa": "Índice no select do portal (legado/navegador)",
+        "extras": [
+            {"campo": "id_api", "rotulo": "ID na API (GET /partes-afetadas)", "numerico": True, "opcional": True},
+        ],
     },
     "destinos": {
         "label": "Destinos",
@@ -53,8 +62,13 @@ SECOES = {
         "alias_fk": "destino_id",
         "campo_nome": "nome",
         "tem_id_mapa": True,
+        "id_mapa_opcional": True,
         "cache": "destino",
         "singular": "Destino",
+        "rotulo_id_mapa": "Índice no select do portal (legado/navegador)",
+        "extras": [
+            {"campo": "id_api", "rotulo": "ID na API (GET /destino-condenacoes)", "numerico": True, "opcional": True},
+        ],
     },
     # ---- Comercializacao (De -> Para das planilhas de vendas) ----
     "produtos-venda": {
@@ -68,10 +82,13 @@ SECOES = {
         "singular": "Produto de venda",
         "grupo": "comercializacao",
         "rotulo_nome": "Produto na planilha (De)",
-        "rotulo_id_mapa": "ID do produto no MAPA (Para)",
-        "ajuda_id_mapa": "Casa com o id=NNN da linha do produto padronizado no portal.",
+        "id_mapa_opcional": True,
+        "rotulo_id_mapa": "ID do produto no portal (legado/navegador)",
+        "ajuda_id_mapa": "Casa com o id=NNN da linha do produto padronizado no portal. Só o modo navegador usa.",
         "extras": [
-            {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal (Para)",
+            {"campo": "cod_api", "rotulo": "cod_produto na API (GET /produtos)", "numerico": True, "opcional": True,
+             "ajuda": "Código enviado no webservice. Sem ele o produto fica como pendência."},
+            {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal (legado/navegador)",
              "ajuda": "Texto digitado no campo de busca do produto padronizado."},
         ],
     },
@@ -172,18 +189,30 @@ def register(bp):
             extras = {}
             for ex in cfg.get("extras", []):
                 valor = (request.form.get(ex["campo"]) or "").strip()
-                if not valor:
+                if ex.get("numerico"):
+                    if not valor and ex.get("opcional"):
+                        extras[ex["campo"]] = None
+                        continue
+                    if not valor.isdigit() or int(valor) <= 0:
+                        flash(f"{ex['rotulo']}: informe um inteiro maior que zero.", "warning")
+                        return redirect(request.url)
+                    extras[ex["campo"]] = int(valor)
+                    continue
+                if not valor and not ex.get("opcional"):
                     flash(f"Informe: {ex['rotulo']}.", "warning")
                     return redirect(request.url)
-                extras[ex["campo"]] = valor
+                extras[ex["campo"]] = valor or None
 
             id_mapa = None
             if cfg["tem_id_mapa"]:
                 raw = (request.form.get("id_mapa") or "").strip()
-                if not raw.isdigit() or int(raw) <= 0:
+                if not raw and cfg.get("id_mapa_opcional"):
+                    id_mapa = None
+                elif not raw.isdigit() or int(raw) <= 0:
                     flash("Informe um ID do MAPA válido (inteiro maior que zero).", "warning")
                     return redirect(request.url)
-                id_mapa = int(raw)
+                else:
+                    id_mapa = int(raw)
 
             novo = item is None
             if novo:

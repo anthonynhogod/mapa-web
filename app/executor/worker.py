@@ -21,6 +21,7 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.models import ExecJob, Registro, MapaCredencial, WorkerSession  # Adicione WorkerSession
 from app.executor.credentials import ensure_valid_credential  # valida credenciais
+from app.mapa_api.execucao import executar_job_api
 
 _ACTIVE_NAV = set()
 _ACTIVE_LOCK = Lock()
@@ -221,6 +222,20 @@ class Worker:
                         registro.data_fim = job.finished_at
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} FALHOU: credenciais ausentes")
+                        continue
+
+                    # --- Webservice: um envio JSON (sem navegador) ---
+                    if (job.meta or {}).get("backend") == "api":
+                        ok_api, msg_api = executar_job_api(job, registro, cred)
+                        job.finished_at = dt.datetime.utcnow()
+                        job.progress = len(job.commands or []) if ok_api else job.progress
+                        job.status = "SUCESSO" if ok_api else "FALHOU"
+                        if not ok_api:
+                            job.errors = (job.errors or []) + [msg_api]
+                        registro.status = "FZ" if ok_api else "ER"
+                        registro.data_fim = job.finished_at
+                        db.session.commit()
+                        print(f"[{self.name}] job={job.id} {job.status} (api): {msg_api[:200]}")
                         continue
 
                     ok, err = ensure_valid_credential(cred, dia_str)

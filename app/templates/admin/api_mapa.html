@@ -1,0 +1,64 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin — API do MAPA{% endblock %}
+{% block content %}
+<h2 class="titulo-form">API do MAPA (webservice PGA-SIGSIF)</h2>
+
+<div class="alert" style="margin-bottom:14px;">
+  <div class="alert__icon">{{ '🧪' if ambiente == 'homologacao' else ('🚨' if ambiente == 'producao' else 'ℹ️') }}</div>
+  <div class="alert__content">
+    Modo de execução: <strong>{{ 'webservice (API)' if usa_api else 'navegador (Selenium, legado)' }}</strong>.
+    Ambiente: <strong>{{ ambiente }}</strong>{% if url %} ({{ url }}){% endif %}.
+    {% if ambiente == 'producao' %}Os envios gravam dados REAIS.{% else %}Homologação: ambiente de testes do MAPA.{% endif %}
+    Troque com <code>MAPA_API_AMBIENTE</code> / <code>EXEC_BACKEND</code> no <code>.flaskenv</code>.
+  </div>
+</div>
+
+<h3 class="titulo-form">Espécies (id em GET /especies)</h3>
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead><tr><th>Espécie</th><th>ID na API</th><th>Ação</th></tr></thead>
+    <tbody>
+      {% for e in especies %}
+      <tr>
+        <td>{{ e.nome }}</td>
+        <td colspan="2">
+          <form method="post" action="{{ url_for('admin.api_mapa_especie', item_id=e.id) }}" class="row" style="gap:8px;">
+            <input type="number" min="1" name="id_api" value="{{ '' if e.id_api is none else e.id_api }}" placeholder="vazio = pendência">
+            <button class="btn btn--outline btn--table" type="submit">Salvar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h3 class="titulo-form" style="margin-top:20px;">Catálogos</h3>
+<p style="opacity:.8; font-size:.9em;">
+  Usa as <em>suas</em> Credenciais MAPA. “Sincronizar” preenche os ids da API que estiverem vazios quando o nome
+  casar de forma inequívoca com o De→Para (não sobrescreve o que você já informou).
+</p>
+<div class="row" style="gap:8px; flex-wrap:wrap;">
+  <form method="post" action="{{ url_for('admin.api_mapa_sincronizar') }}">
+    <button class="btn btn--primary" type="submit">Sincronizar catálogos</button>
+  </form>
+  {% for c in catalogos %}
+  <a class="btn btn--outline btn--table" href="{{ url_for('admin.api_mapa_catalogo', nome=c) }}">Ver {{ c }}</a>
+  {% endfor %}
+</div>
+
+{% if relatorio %}
+<h3 class="titulo-form" style="margin-top:20px;">Resultado da sincronização</h3>
+{% for nome, r in relatorio.items() %}
+<details open style="margin-bottom:10px;">
+  <summary><strong>{{ nome }}</strong> — {{ r.total }} no catálogo; {{ r.preenchidos|length }} preenchido(s);
+    {{ r.sem_correspondencia|length }} sem correspondência{% if r.ja_preenchidos %}; {{ r.ja_preenchidos }} já preenchido(s){% endif %}</summary>
+  {% if r.sem_id %}
+  <div class="msg-erro">O catálogo não traz um campo de id reconhecível. Amostra crua: <code>{{ r.amostra }}</code></div>
+  {% endif %}
+  {% if r.preenchidos %}<p>Preenchidos: {{ r.preenchidos|join('; ') }}</p>{% endif %}
+  {% if r.sem_correspondencia %}<p>Sem correspondência (cadastre à mão em Constantes): {{ r.sem_correspondencia|join('; ') }}</p>{% endif %}
+</details>
+{% endfor %}
+{% endif %}
+{% endblock %}

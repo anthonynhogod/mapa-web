@@ -58,7 +58,7 @@ def cenario(app, monkeypatch):
     db.session.add(reg)
     db.session.flush()
     venda = {"rotulo": "Venda", "tipo_transacao_idx": 1, "ambito_idx": 1, "operador_idx": 2}
-    cmds = build_commands(build_plano([{"produto": "BACON", "uf": "RS", "quantidade": 3}]), tipo=venda)
+    cmds = build_commands(build_plano([{"produto": "BACON", "uf": "RS", "quantidade": 3}], backend="browser"), tipo=venda)
     job = ExecJob(registro_id=reg.id, owner_user_id=u.id, gta_source="vendas", commands=cmds,
                   meta={"modulo": "comercializacao", "numero_sif": "999"}, status="ESPERA", errors=[])
     db.session.add(job)
