@@ -13,3 +13,4 @@ app/runner/drivers/chromedriver*
 screenshot_*.png
 logs/
 .pytest_cache/
+api_catalogos/
