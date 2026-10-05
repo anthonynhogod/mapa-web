@@ -1,42 +1,46 @@
 {% extends "admin/layout.html" %}
 {% block title %}Constantes — Condenas{% endblock %}
 {% block content %}
-
+<div class="cst">
 {% include "admin/constantes/_abas.html" %}
 
-<h2 class="titulo-form">Partes da planilha de Condenas</h2>
-<p style="opacity:.75; font-size:.9em;">
-  Índices de coluna usados na montagem da stack de condenas. Informe os slots
-  separados por vírgula, na ordem em que já são lidos hoje.
-</p>
+<div class="cst-cab">
+  <div>
+    <h2>Condenas</h2>
+    <p>Partes da planilha de Condenas: índices de coluna usados na montagem da stack. Informe os slots
+      separados por vírgula, na ordem em que já são lidos hoje.</p>
+  </div>
+</div>
 
-<div class="table-scroll">
-  <table class="tabela-registros">
-    <thead>
-      <tr><th>ID</th><th>Parte</th><th>Slots</th><th>Status</th><th>Ações</th></tr>
-    </thead>
-    <tbody>
-      {% for it in itens %}
-      <tr>
-        <form method="post" action="{{ url_for('admin.condena_editar', item_id=it.id) }}">
-          <td>{{ it.id }}</td>
-          <td>{{ it.nome }}</td>
-          <td><input type="text" name="slots" value="{{ it.slots | join(', ') }}" style="width:140px;"></td>
+<div class="cst-cartao">
+  <div class="cst-rolagem">
+    <table class="cst-tabela cst-inline">
+      <thead><tr><th>#</th><th>Parte</th><th>Slots</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for it in itens %}
+        {# <form> dentro de <tr> é HTML inválido: os campos apontam para o form pelo atributo `form` #}
+        <tr class="{{ '' if it.ativo else 'is-inativa' }}">
+          <td class="c-id">{{ it.id }}</td>
+          <td class="c-nome">{{ it.nome }}</td>
+          <td><input type="text" name="slots" form="cd{{ it.id }}" value="{{ it.slots | join(', ') }}" style="width:150px;"></td>
           <td>
-            <select name="ativo">
+            <select name="ativo" form="cd{{ it.id }}">
               <option value="1" {{ 'selected' if it.ativo else '' }}>Ativo</option>
               <option value="0" {{ 'selected' if not it.ativo else '' }}>Inativo</option>
             </select>
           </td>
-          <td class="acoes">
-            <button class="btn btn--outline btn--table" type="submit">Salvar</button>
+          <td class="c-acoes">
+            <form id="cd{{ it.id }}" method="post" action="{{ url_for('admin.condena_editar', item_id=it.id) }}" style="display:inline;">
+              <button class="cst-btn cst-btn--sec cst-btn--mini" type="submit">Salvar</button>
+            </form>
           </td>
-        </form>
-      </tr>
-      {% else %}
-      <tr><td colspan="5">Nenhum registro encontrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="cst-vazio">Nenhum registro encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 </div>
 {% endblock %}

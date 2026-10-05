@@ -1,62 +1,97 @@
 {% extends "admin/layout.html" %}
 {% block title %}Constantes — {{ cfg.label }}{% endblock %}
 {% block content %}
-
+<div class="cst">
 {% include "admin/constantes/_abas.html" %}
 
-<div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
-  <h2 class="titulo-form" style="margin:0;">{{ cfg.label }}</h2>
-  <a class="btn btn--outline btn--table"
-     href="{{ url_for('admin.constante_form', secao=secao_atual) }}">Novo</a>
+<div class="cst-cab">
+  <div>
+    <h2>{{ cfg.label }}</h2>
+    <p>
+      {% if secao_atual == 'produtos-venda' %}Produto da planilha de vendas (De) → código no MAPA (Para).
+      {% elif secao_atual == 'estados-venda' %}UF da planilha (De) → índice da opção no portal (Para).
+      {% elif secao_atual == 'diagnosticos' %}Texto exato do diagnóstico no MAPA e as grafias aceitas nas planilhas.
+      {% elif secao_atual == 'partes' %}Parte afetada e o valor que o MAPA espera.
+      {% elif secao_atual == 'destinos' %}Destino da condenação e o valor que o MAPA espera.
+      {% endif %}
+      Um termo só é aceito se bater com o nome ou com um apelido cadastrado.
+    </p>
+  </div>
+  <a class="cst-btn" href="{{ url_for('admin.constante_form', secao=secao_atual) }}"><i class="fa fa-plus"></i> Novo</a>
 </div>
 
-<form method="get" class="row" style="gap:8px; margin-bottom:12px;">
-  <input type="text" name="q" value="{{ busca or '' }}" placeholder="Buscar por nome...">
-  <button class="btn btn--outline btn--table" type="submit">Buscar</button>
-  {% if busca %}
-  <a class="btn btn--outline btn--table"
-     href="{{ url_for('admin.constantes_secao', secao=secao_atual) }}">Limpar</a>
+<form method="get" class="cst-barra">
+  <div class="cst-busca">
+    <i class="fa fa-search"></i>
+    <input type="search" name="q" value="{{ busca or '' }}" placeholder="Buscar por nome…" autocomplete="off">
+  </div>
+  <select name="status" onchange="this.form.submit()" aria-label="Filtrar por status">
+    <option value="" {{ 'selected' if not status else '' }}>Todos os status</option>
+    <option value="ativo" {{ 'selected' if status == 'ativo' else '' }}>Somente ativos</option>
+    <option value="inativo" {{ 'selected' if status == 'inativo' else '' }}>Somente inativos</option>
+  </select>
+  <button class="cst-btn cst-btn--sec" type="submit">Buscar</button>
+  {% if busca or status %}
+  <a class="cst-btn cst-btn--sec" href="{{ url_for('admin.constantes_secao', secao=secao_atual) }}">Limpar</a>
   {% endif %}
+  <span class="cst-total">{{ itens|length }} {{ 'item' if itens|length == 1 else 'itens' }}</span>
 </form>
 
-<div class="table-scroll">
-  <table class="tabela-registros">
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>{{ cfg.rotulo_nome or ('Descrição no MAPA' if secao_atual == 'diagnosticos' else 'Nome') }}</th>
-        {% for ex in cfg.extras or [] %}<th>{{ ex.rotulo }}</th>{% endfor %}
-        {% if cfg.tem_id_mapa %}<th>{{ 'Índice' if secao_atual == 'estados-venda' else 'ID MAPA' }}</th>{% endif %}
-        <th>Apelidos aceitos</th>
-        <th>Status</th>
-        <th>Ações</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for it in itens %}
-      <tr>
-        <td>{{ it.id }}</td>
-        <td>{{ it[cfg.campo_nome] }}</td>
-        {% for ex in cfg.extras or [] %}<td>{{ '' if it[ex.campo] is none else it[ex.campo] }}</td>{% endfor %}
-        {% if cfg.tem_id_mapa %}<td>{{ '' if it.id_mapa is none else it.id_mapa }}</td>{% endif %}
-        <td>
-          {% for a in it.aliases %}<span class="chip">{{ a.alias }}</span>{% endfor %}
-        </td>
-        <td>{{ 'Ativo' if it.ativo else 'Inativo' }}</td>
-        <td class="acoes">
-          <a class="btn btn--outline btn--table"
-             href="{{ url_for('admin.constante_form', secao=secao_atual, item_id=it.id) }}">Editar</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8">Nenhum registro encontrado.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="cst-cartao">
+  {% if itens %}
+  <div class="cst-rolagem">
+    <table class="cst-tabela">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>{{ cfg.rotulo_nome or ('Descrição no MAPA' if secao_atual == 'diagnosticos' else 'Nome') }}</th>
+          {% for ex in cfg.extras or [] %}<th>{{ ex.rotulo_curto or ex.rotulo }}</th>{% endfor %}
+          {% if cfg.tem_id_mapa %}<th>{{ cfg.rotulo_id_mapa_curto or ('Índice' if secao_atual == 'estados-venda' else 'ID MAPA') }}</th>{% endif %}
+          <th>Apelidos aceitos</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in itens %}
+        {% set nome_norm = it[cfg.campo_nome] | norm %}
+        {% set apelidos = it.aliases | rejectattr('alias_norm', 'equalto', nome_norm) | list %}
+        <tr class="{{ '' if it.ativo else 'is-inativa' }}">
+          <td class="c-id">{{ it.id }}</td>
+          <td class="c-nome">{{ it[cfg.campo_nome] }}</td>
+          {% for ex in cfg.extras or [] %}
+          <td class="c-num">
+            {% if ex.numerico %}
+              {% if it[ex.campo] is none %}<span class="cst-id cst-id--falta" title="Não informado">—</span>
+              {% else %}<span class="cst-id">{{ it[ex.campo] }}</span>{% endif %}
+            {% else %}{{ '' if it[ex.campo] is none else it[ex.campo] }}{% endif %}
+          </td>
+          {% endfor %}
+          {% if cfg.tem_id_mapa %}
+          <td class="c-num">{% if it.id_mapa is none %}<span class="cst-vazio">—</span>{% else %}<span class="cst-id">{{ it.id_mapa }}</span>{% endif %}</td>
+          {% endif %}
+          <td>
+            {% if apelidos %}
+            <div class="cst-chips">
+              {% for a in apelidos[:4] %}<span class="cst-chip">{{ a.alias }}</span>{% endfor %}
+              {% if apelidos|length > 4 %}<span class="cst-chip cst-chip--mais" title="{{ apelidos[4:]|map(attribute='alias')|join(', ') }}">+{{ apelidos|length - 4 }}</span>{% endif %}
+            </div>
+            {% else %}<span class="cst-vazio">—</span>{% endif %}
+          </td>
+          <td><span class="cst-status {{ '' if it.ativo else 'cst-status--off' }}">{{ 'Ativo' if it.ativo else 'Inativo' }}</span></td>
+          <td class="c-acoes">
+            <a class="cst-btn cst-btn--sec cst-btn--mini" href="{{ url_for('admin.constante_form', secao=secao_atual, item_id=it.id) }}">Editar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="cst-vazio-bloco">
+    Nenhum registro encontrado{% if busca or status %} para este filtro{% endif %}.
+  </div>
+  {% endif %}
 </div>
-
-<p style="margin-top:14px; opacity:.75; font-size:.9em;">
-  Um termo de planilha só é aceito na validação se bater com o nome ou com um dos
-  apelidos cadastrados aqui. Não existe correspondência automática.
-</p>
+</div>
 {% endblock %}

@@ -101,7 +101,8 @@ def test_admin_api_mapa_paginas(app, admin, monkeypatch):
 
 def test_admin_constantes_com_ids_da_api_opcionais(app, admin):
     html = admin.get("/admin/constantes/produtos-venda").get_data(as_text=True)
-    assert "cod_produto" in html
+    assert "Código API" in html and "cst-tabela" in html
+    assert "cod_produto na API" in admin.get("/admin/constantes/produtos-venda/novo").get_data(as_text=True)
     r = admin.post("/admin/constantes/produtos-venda/novo", data={
         "nome": "PRODUTO NOVO", "descricao_busca": "x", "cod_api": "321", "id_mapa": "", "ativo": "1"})
     assert r.status_code == 302

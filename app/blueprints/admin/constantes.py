@@ -36,7 +36,7 @@ SECOES = {
         "cache": "diagnostico",
         "singular": "Diagnóstico",
         "extras": [
-            {"campo": "id_api", "rotulo": "ID na API (GET /diagnosticos)", "numerico": True, "opcional": True,
+            {"campo": "id_api", "rotulo": "ID na API (GET /diagnosticos)", "rotulo_curto": "ID na API", "numerico": True, "opcional": True,
              "ajuda": "Preenchido por “Sincronizar catálogos” em Admin > API do MAPA, ou à mão."},
         ],
     },
@@ -51,8 +51,9 @@ SECOES = {
         "cache": "parte",
         "singular": "Parte afetada",
         "rotulo_id_mapa": "Índice no select do portal (legado/navegador)",
+        "rotulo_id_mapa_curto": "Índice portal",
         "extras": [
-            {"campo": "id_api", "rotulo": "ID na API (GET /partes-afetadas)", "numerico": True, "opcional": True},
+            {"campo": "id_api", "rotulo": "ID na API (GET /partes-afetadas)", "rotulo_curto": "ID na API", "numerico": True, "opcional": True},
         ],
     },
     "destinos": {
@@ -66,8 +67,9 @@ SECOES = {
         "cache": "destino",
         "singular": "Destino",
         "rotulo_id_mapa": "Índice no select do portal (legado/navegador)",
+        "rotulo_id_mapa_curto": "Índice portal",
         "extras": [
-            {"campo": "id_api", "rotulo": "ID na API (GET /destino-condenacoes)", "numerico": True, "opcional": True},
+            {"campo": "id_api", "rotulo": "ID na API (GET /destino-condenacoes)", "rotulo_curto": "ID na API", "numerico": True, "opcional": True},
         ],
     },
     # ---- Comercializacao (De -> Para das planilhas de vendas) ----
@@ -84,11 +86,12 @@ SECOES = {
         "rotulo_nome": "Produto na planilha (De)",
         "id_mapa_opcional": True,
         "rotulo_id_mapa": "ID do produto no portal (legado/navegador)",
+        "rotulo_id_mapa_curto": "ID portal",
         "ajuda_id_mapa": "Casa com o id=NNN da linha do produto padronizado no portal. Só o modo navegador usa.",
         "extras": [
-            {"campo": "cod_api", "rotulo": "cod_produto na API (GET /produtos)", "numerico": True, "opcional": True,
+            {"campo": "cod_api", "rotulo": "cod_produto na API (GET /produtos)", "rotulo_curto": "Código API", "numerico": True, "opcional": True,
              "ajuda": "Código enviado no webservice. Sem ele o produto fica como pendência."},
-            {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal (legado/navegador)",
+            {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal (legado/navegador)", "rotulo_curto": "Busca no portal",
              "ajuda": "Texto digitado no campo de busca do produto padronizado."},
         ],
     },
@@ -121,6 +124,24 @@ def register(bp):
     """Registra as rotas de constantes no blueprint admin já existente."""
     _registrar_tipos_lancamento(bp)
 
+    @bp.app_template_filter("norm")
+    def _norm_filter(txt):
+        return normalize_str(txt or "")
+
+    @bp.context_processor
+    def _contagens():
+        """`contar(secao)` para os selos das abas (consulta so quando a aba e renderizada)."""
+        def contar(chave):
+            try:
+                if chave == "condenas":
+                    return CondenaParte.query.count()
+                if chave == "tipos-lancamento":
+                    return TipoLancamento.query.count()
+                return SECOES[chave]["model"].query.count()
+            except Exception:
+                return "·"
+        return {"contar": contar}
+
     # ------------------------------------------------------------------
     # Listagem
     # ------------------------------------------------------------------
@@ -145,18 +166,23 @@ def register(bp):
             return redirect(url_for("admin.constantes"))
 
         busca = (request.args.get("q") or "").strip()
+        status = (request.args.get("status") or "").strip()
         model = cfg["model"]
         campo = getattr(model, cfg["campo_nome"])
 
         qs = model.query
         if busca:
             qs = qs.filter(campo.ilike(f"%{busca}%"))
+        if status == "ativo":
+            qs = qs.filter(model.ativo.is_(True))
+        elif status == "inativo":
+            qs = qs.filter(model.ativo.is_(False))
         itens = qs.order_by(campo).all()
 
         return render_template(
             "admin/constantes/lista.html",
             secoes=SECOES, secao_atual=secao, cfg=cfg,
-            itens=itens, busca=busca,
+            itens=itens, busca=busca, status=status,
         )
 
     # ------------------------------------------------------------------
