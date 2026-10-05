@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Preview Comercialização{% endblock %}
+{% block main %}
+<div class="painel preview-panel">
+  <h2 class="titulo-form" style="padding:12px; border-radius:10px;">
+    Preview — Comercialização {{ registro.periodo_label }}
+  </h2>
+
+  <div class="mini-painel">
+    <div class="mini-painel-item">
+      <div class="circulo-info"><div class="numero-circulo">{{ totais.ufs }}</div></div>
+      <div class="texto-painel">Estados</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><div class="numero-circulo">{{ totais.itens }}</div></div>
+      <div class="texto-painel">Produtos lançados</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><div class="numero-circulo">{{ '{:,.2f}'.format(totais.quantidade).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div>
+      <div class="texto-painel">Quantidade total</div>
+    </div>
+  </div>
+
+  <div class="alert" style="margin-top:12px;">
+    <div class="alert__icon">ℹ️</div>
+    <div class="alert__content">
+      Arquivo: <strong>{{ tmp.filename }}</strong>
+      {% if meta.empresa %}— {{ meta.empresa }}{% endif %}.
+      Se o registro do período já tiver estados lançados no portal, a execução é abortada sem alterar nada.
+      {% for w in meta.warnings %}
+      <div class="msg-erro" style="margin-top:6px;">Aviso: {{ w.where }} — {{ w.message }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" type="button" onclick="showTab('tab-uf', this)">Por estado</button>
+    <button class="tab-btn" type="button" onclick="showTab('tab-commands', this)">Comandos</button>
+  </div>
+
+  <div class="preview-body">
+    <div id="tab-uf" class="tab-pane active">
+      {% for b in plano %}
+      <details style="margin-bottom:8px;">
+        <summary><strong>{{ b.uf }}</strong> — {{ b.itens|length }} produto(s)</summary>
+        <div class="table-scroll">
+          <table class="tabela-registros">
+            <thead>
+              <tr><th>Produto (planilha)</th><th>Descrição no MAPA</th><th>ID MAPA</th><th>Quantidade</th></tr>
+            </thead>
+            <tbody>
+              {% for i in b.itens %}
+              <tr>
+                <td>{{ i.produto }}</td>
+                <td>{{ i.descricao }}</td>
+                <td>{{ i.id }}</td>
+                <td>{{ '%.2f'|format(i.quantidade) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+      {% endfor %}
+    </div>
+
+    <div id="tab-commands" class="tab-pane">
+      <div class="table-scroll">
+        <pre style="white-space: pre-wrap; background: var(--surface-2); border:1px solid var(--border); padding:12px; border-radius:10px;">
+{% for c in comandos %}{{ c }}
+{% endfor %}
+        </pre>
+      </div>
+    </div>
+
+    <form action="{{ url_for('comercializacao.finalizar', registro_id=registro.id) }}" method="post">
+      <button class="btn" type="submit">Confirmar & Executar</button>
+      <a class="btn btn--outline" href="{{ url_for('comercializacao.novo') }}">Enviar outra planilha</a>
+    </form>
+  </div>
+</div>
+<script>
+  function showTab(id, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "layout.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Histórico{% endblock %}
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="painel__title">
+  <h2 class="titulo-form">Histórico de lançamentos</h2>
+</div>
+
+<!-- Toolbar de filtros (igual, sem mudanças) -->
+<form class="toolbar" method="get">
+  <div class="toolbar__group">
+    <div class="row grid-2">
+      <div class="form-input">
+        <label class="form-label">Status</label>
+        <select name="status">
+          <option value="">Todos</option>
+          {% for k, v in STATUS_LABELS.items() %}
+          <option value="{{ k }}" {{ 'selected' if filtros.status==k else '' }}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-input-multi">
+        <label for="especie" class="form-label">Espécie/Animal:</label>
+        <select name="especie" id="especie">
+          <option value="">Selecione uma espécie</option>
+          <option value="suino">Suíno</option>
+          <option value="aves">Aves</option>
+          <option value="bovinos">Bovinos</option>
+        </select>
+      </div>
+    </div>
+    <div class="row grid-2">
+      <div class="form-input">
+        <label class="form-label">De</label>
+        <input type="date" name="de" value="{{ filtros.de }}">
+      </div>
+      <div class="form-input">
+        <label class="form-label">Até</label>
+        <input type="date" name="ate" value="{{ filtros.ate }}">
+      </div>
+    </div>
+  </div>
+  <div class="toolbar__group">
+    <button class="btn btn--outline" type="submit">Filtrar</button>
+    <a class="btn btn--outline" href="{{ url_for('registros.historico') }}">Limpar</a>
+  </div>
+</form>
+
+<!-- Tabela -->
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Data</th>
+        <th>Status</th>
+        <th>Espécie</th>
+        <th>Observação</th>
+        <th>Tempo de execução</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if registros %}
+      {% set chip_map = {'AT':'chip--info','PT':'chip--warning','FZ':'chip--success','ER':'chip--danger'} %}
+      {% for r in registros %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.periodo_label }}</td>
+        <td><span class="chip {{ chip_map.get(r.status, 'chip--info') }}">{{ STATUS_LABELS.get(r.status, r.status)
+            }}</span></td>
+        <td>{{ 'Comercialização' if r.is_comercializacao else r.especie }}</td>
+        <td>{{ r.obs or '—' }}</td>
+        <!-- Tempo de execução baseado em data_inicio e data_fim de Registro -->
+        <td>
+          {% if r.data_inicio and r.data_fim %}
+          {{ ((r.data_fim - r.data_inicio).total_seconds() / 60)|round(2) }} min
+          {% else %}
+          —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% else %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">Nenhum registro encontrado.</div>
+        </td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+  <div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+</div>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block title %}Nova Comercialização{% endblock %}
+
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="titulo-form">Lançar Mapa de Comercialização</div>
+
+<form action="{{ url_for('comercializacao.novo') }}" method="post" enctype="multipart/form-data">
+  {{ form.csrf_token }}
+  <div class="form-completo">
+    <div class="row grid-1">
+      <div class="sub-titulo-form">Planilha de vendas (.xlsx)</div>
+    </div>
+
+    <div class="row grid-1">
+      <div class="form-input">
+        <label for="vendas-file" class="form-label">Arquivo:</label>
+        <div class="file-custom" data-allowed=".xlsx" data-max="10485760">
+          {{ form.file(id="vendas-file", class="file-input", accept=".xlsx") }}
+          <label class="file-label btn btn--outline" for="vendas-file"><span>Selecionar</span></label>
+          <span class="file-name" id="vendas-file-name" hidden>—</span>
+          <div class="msg-erro" data-error hidden></div>
+        </div>
+        <small>Colunas obrigatórias: PRODUTO, ESTADO e QUANTIDADE. O período é lido do título da planilha
+          (ex.: “Relatório Inspeção Federal - Vendas - 01/03/2026 até 31/03/2026”).</small>
+      </div>
+    </div>
+
+    <div class="row grid-3">
+      <div class="form-input-multi">
+        <label for="periodo_ini" class="form-label">Início do período (opcional):</label>
+        {{ form.periodo_ini(id="periodo_ini", placeholder="dd/mm/aaaa") }}
+      </div>
+      <div class="form-input-multi">
+        <label for="periodo_fim" class="form-label">Fim do período (opcional):</label>
+        {{ form.periodo_fim(id="periodo_fim", placeholder="dd/mm/aaaa") }}
+      </div>
+      <div class="form-input-multi">
+        <label for="obs" class="form-label">Observações:</label>
+        {{ form.obs(id="obs") }}
+      </div>
+    </div>
+
+    <div class="row">
+      <div></div>
+      <div class="form-submit">
+        {{ form.submit(class="btn btn-primary", value="Enviar e validar") }}
+      </div>
+    </div>
+    <p style="opacity:.75; font-size:.9em;">
+      As datas só são necessárias se a planilha não trouxer o período no título; se informadas, valem sobre o título.
+    </p>
+  </div>
+</form>
+{% endblock %}

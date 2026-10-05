@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block main %}
+<div class="form-login">
+
+<form method="POST">
+    {{ form.hidden_tag() }}
+    
+    {% for field in form %}
+        <div>
+            {{ field.label }}<br>
+            {{ field(size=32) }}<br>
+            {% if field.errors %}
+                <ul class="errors">
+                    {% for error in field.errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </div>
+    {% endfor %}
+
+    <button type="submit">Enviar</button>
+</form>
+
+</div>
+{% endblock %}

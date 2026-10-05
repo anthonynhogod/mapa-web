@@ -1,0 +1,17 @@
+# Copie para .flaskenv e preencha. NUNCA commite o .flaskenv real.
+FLASK_APP=wsgi:app
+FLASK_RUN_HOST=0.0.0.0
+FLASK_RUN_PORT=5000
+API_TOKENS=troque-este-token
+JWT_SECRET=troque-este-segredo
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+FERNET_KEY=
+SECRET_KEY=troque-esta-chave
+# Opcional: se vazio/inexistente o Selenium Manager baixa o driver compativel automaticamente
+CHROMEDRIVER_PATH=
+SCRIPTS_JS_PATH=app/runner/scripts/scripts.js
+NAV_MODE=HIDE
+NAV_SPEED_PROFILE=ultra
+NAV_PROFILE=prod
+NAV_TAP_UI=never
+APP_ENV=dev

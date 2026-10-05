@@ -1,0 +1,13 @@
+<div class="row" style="gap:8px; margin-bottom:18px; flex-wrap:wrap;">
+  {% for chave, s in secoes.items() if not s.grupo %}
+  <a class="btn btn--table {{ 'btn--primary' if chave == secao_atual else 'btn--outline' }}"
+     href="{{ url_for('admin.constantes_secao', secao=chave) }}">{{ s.label }}</a>
+  {% endfor %}
+  <a class="btn btn--table {{ 'btn--primary' if secao_atual == 'condenas' else 'btn--outline' }}"
+     href="{{ url_for('admin.constantes_secao', secao='condenas') }}">Condenas</a>
+  <span style="opacity:.6; align-self:center; padding:0 4px;">| Comercialização:</span>
+  {% for chave, s in secoes.items() if s.grupo == 'comercializacao' %}
+  <a class="btn btn--table {{ 'btn--primary' if chave == secao_atual else 'btn--outline' }}"
+     href="{{ url_for('admin.constantes_secao', secao=chave) }}">{{ s.label }}</a>
+  {% endfor %}
+</div>

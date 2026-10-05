@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% block title %}Credenciais MAPA{% endblock %}
+{% block mini_painel %}
+{% endblock %}
+{% block content %}
+<h2 class="titulo-form" style="padding: 12px; border-radius: 10px;">
+  {{ 'Editar credencial' if cred else 'Cadastrar nova credencial' }}
+</h2>
+
+<form method="POST" action="{{ url_for('.credenciais_mapa') }}" class="form-completo" autocomplete="off">
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="usuario_app">Usuário (MAPA)</label>
+      <input id="usuario_app" name="usuario_app" type="text" required value="{{ cred.usuario_app if cred else '' }}"
+        placeholder="ex.: joao.silva.ex">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="senha">
+        Senha {{ '(deixe em branco para manter)' if cred else '' }}
+      </label>
+      <input id="senha" name="senha" type="password" {% if not cred %}required{% endif %}
+        placeholder="{{ '••••••••' if cred else 'Digite a senha da automação' }}">
+    </div>
+  </div>
+
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="numero_sif">Número SIF</label>
+      <input id="numero_sif" name="numero_sif" type="number" required value="{{ cred.numero_sif if cred else '' }}"
+        placeholder="ex.: 1234">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="especie">Espécie</label>
+      <input id="especie" name="especie" type="number" required value="{{ cred.especie if cred else '' }}"
+        placeholder="ex.: bovina, suína, aves">
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn">
+      {{ 'Atualizar' if cred else 'Salvar credencial' }}
+    </button>
+  </div>
+
+  {% if cred %}
+  <div style="margin-top: 12px; color: var(--muted); font-size: .95rem;">
+    <div>Registrado em:
+      {% if cred.created_at %}{{ cred.created_at.strftime('%d/%m/%Y %H:%M') }}{% else %}-{% endif %}
+    </div>
+    <div>Última atualização:
+      {% if cred.updated_at %}{{ cred.updated_at.strftime('%d/%m/%Y %H:%M') }}{% else %}-{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

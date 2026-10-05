@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Registros Prontos{% endblock %}
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="titulo-form">Registros Prontos</div>
+
+
+{% if registros %}
+<table class="tabela-registros">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Espécie</th>
+            <th>Observações</th>
+            <th>Status</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in registros %}
+        <tr>
+            <td>{{ r.data.strftime('%d/%m/%Y') }}</td>
+            <td>{{ r.especie }}</td>
+            <td>{{ r.obs or 'Sem Observações' }}</td>
+            <td>{{ r.status }}</td>
+            <td>
+                {% if r.status == "AT" %}
+                <a href="{{ url_for('registros.incluir_dados', registro_id=r.id) }}" class="btn btn--outline">Incluir
+                    dados</a>
+                {% elif r.status == "FZ" %}
+                <a href="{{ url_for('registros.detalhe', registro_id=r.id) }}" class="btn btn--outline">Vizualizar
+                    dados</a>
+                {% endif %}
+                <a href="" class="btn btn--outline">Editar</a>
+                <button type="button" class="btn" data-url="{{ url_for('registros.excluir', registro_id=r.id) }}"
+                    data-descricao="o registro de {{ r.especie }} em {{ r.data.strftime('%d/%m/%Y') }}"
+                    onclick="confirmarExclusao(this)">
+                    Excluir
+                </button>
+
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+{% else %}
+<p>Nenhum registro encontrado.</p>
+{% endif %}
+
+{% endblock %}

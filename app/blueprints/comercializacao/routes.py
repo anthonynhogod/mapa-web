@@ -1,0 +1,243 @@
+"""Modulo Comercializacao: planilha de vendas -> preview por UF -> job de execucao."""
+from datetime import datetime
+
+from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask_login import current_user, login_required
+from markupsafe import escape
+from sqlalchemy.exc import IntegrityError
+from werkzeug.utils import secure_filename
+
+from app.executor.queue import get_queue
+from app.extensions import db
+from app.forms import UploadVendasForm
+from app.logic.comercializacao import build_commands, build_plano, totais as plano_totais
+from app.logic.constantes import ColetorPendencias, ConstanteNaoMapeada
+from app.models import ExecJob, MapaCredencial, Registro, UploadStatus, VendasTmp
+from app.utils.audit import log_action
+from app.utils.format import normalize_str
+from app.utils.pagination import PER_PAGE, paginate_query, resolve_page
+
+from .parser import parse_data_br, validar_vendas
+
+bp = Blueprint("comercializacao", __name__)
+
+TIPO = "comercializacao"
+STATUS_LABELS = {"AT": "Em andamento", "PT": "Pendente", "FZ": "Finalizado", "ER": "Erro"}
+
+
+def _registro_do_usuario(registro_id: int) -> Registro:
+    reg = Registro.query.filter_by(id=registro_id, user_id=current_user.id, tipo=TIPO).first()
+    if reg is None:
+        abort(404)
+    return reg
+
+
+def _vendas_tmp(registro_id: int):
+    return VendasTmp.query.filter_by(registro_id=registro_id).one_or_none()
+
+
+def _payload(tmp):
+    payload = (tmp.payload if tmp else None) or {}
+    return payload.get("records", []), payload.get("meta", {"errors": [], "warnings": [], "counts": {}})
+
+
+def _fmt_issue(it):
+    return f"{it.get('where') or '?'}: {it.get('message') or ''}"
+
+
+# ---------------------------------------------------------------------------
+# Lista
+# ---------------------------------------------------------------------------
+@bp.route("/", methods=["GET"])
+@login_required
+def lista():
+    q = (Registro.query
+         .filter_by(user_id=current_user.id, tipo=TIPO)
+         .order_by(Registro.periodo_ini.desc(), Registro.id.desc()))
+    pagination = paginate_query(q, resolve_page(default=1), db, per_page=PER_PAGE)
+    return render_template(
+        "comercializacao/lista.html",
+        registros=pagination.items, pagination=pagination, STATUS_LABELS=STATUS_LABELS,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Novo: upload da planilha
+# ---------------------------------------------------------------------------
+@bp.route("/novo", methods=["GET", "POST"])
+@login_required
+def novo():
+    form = UploadVendasForm()
+    if not form.validate_on_submit():
+        if request.method == "POST":
+            flash("Verifique o arquivo enviado (somente .xlsx).", "warning")
+            return render_template("comercializacao/novo.html", form=form), 400
+        return render_template("comercializacao/novo.html", form=form)
+
+    arquivo = form.file.data
+    filename = secure_filename(arquivo.filename or "") or "vendas.xlsx"
+    resultado = validar_vendas(arquivo.stream)
+    meta = resultado["meta"]
+    erros = list(meta["errors"])
+
+    # periodo: o informado manualmente vence o lido da planilha
+    ini = parse_data_br(form.periodo_ini.data or "") if form.periodo_ini.data else None
+    fim = parse_data_br(form.periodo_fim.data or "") if form.periodo_fim.data else None
+    if (form.periodo_ini.data and not ini) or (form.periodo_fim.data and not fim):
+        erros.append({"level": "error", "where": "periodo", "message": "Data invalida. Use dd/mm/aaaa."})
+    lido = meta.get("periodo") or {}
+    if not ini and lido.get("ini"):
+        ini = datetime.strptime(lido["ini"], "%Y-%m-%d").date()
+    if not fim and lido.get("fim"):
+        fim = datetime.strptime(lido["fim"], "%Y-%m-%d").date()
+    if not (ini and fim):
+        erros.append({"level": "error", "where": "periodo",
+                      "message": "Periodo nao identificado: informe inicio e fim do periodo."})
+    elif ini > fim:
+        erros.append({"level": "error", "where": "periodo", "message": "O inicio do periodo e posterior ao fim."})
+
+    if erros:
+        resumo = "; ".join(_fmt_issue(e) for e in erros[:5])
+        flash(f"Planilha com erros: {escape(resumo)}", "danger")
+        return render_template("comercializacao/novo.html", form=form), 400
+
+    meta["periodo"] = {"ini": ini.isoformat(), "fim": fim.isoformat()}
+
+    existente = Registro.query.filter_by(
+        user_id=current_user.id, tipo=TIPO, periodo_ini=ini, periodo_fim=fim
+    ).first()
+    if existente and existente.status != "AT":
+        flash(
+            f"Ja existe um registro de comercializacao para {ini:%d/%m/%Y} a {fim:%d/%m/%Y} "
+            f"(status {escape(STATUS_LABELS.get(existente.status, existente.status))}). "
+            "Exclua-o em Comercializacao > Registros para enviar uma nova planilha.",
+            "danger",
+        )
+        return render_template("comercializacao/novo.html", form=form), 409
+
+    registro = existente or Registro(
+        data=ini, periodo_ini=ini, periodo_fim=fim, tipo=TIPO, especie="suino",
+        user_id=current_user.id, data_registro=datetime.now(),
+    )
+    registro.obs = (form.obs.data or "").strip() or registro.obs
+    if existente is None:
+        db.session.add(registro)
+        db.session.flush()
+
+    tmp = _vendas_tmp(registro.id)
+    if tmp is None:
+        tmp = VendasTmp(registro_id=registro.id, uploaded_by=current_user.id)
+        db.session.add(tmp)
+    tmp.filename = filename
+    tmp.model = "vendas"
+    tmp.payload = resultado
+    tmp.status = UploadStatus.VALIDATED
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        flash("Nao foi possivel salvar a planilha (registro duplicado).", "danger")
+        return render_template("comercializacao/novo.html", form=form), 409
+
+    log_action("upload:vendas", entity="Registro", entity_id=registro.id,
+               meta={"arquivo": filename, "registros": meta["counts"].get("output_records")})
+    if meta["warnings"]:
+        aviso = "; ".join(_fmt_issue(w) for w in meta["warnings"][:3])
+        flash(f"Planilha validada com avisos: {escape(aviso)}", "warning")
+    flash("Planilha validada. Confira o preview antes de executar.", "success")
+    return redirect(url_for("comercializacao.preview", registro_id=registro.id))
+
+
+# ---------------------------------------------------------------------------
+# Preview
+# ---------------------------------------------------------------------------
+@bp.route("/<int:registro_id>/preview", methods=["GET"])
+@login_required
+def preview(registro_id: int):
+    registro = _registro_do_usuario(registro_id)
+    tmp = _vendas_tmp(registro.id)
+    records, meta = _payload(tmp)
+    if not records:
+        flash("Nenhuma planilha de vendas valida para este registro. Envie uma planilha.", "warning")
+        return redirect(url_for("comercializacao.novo"))
+
+    coletor = ColetorPendencias()
+    plano = build_plano(records, coletor)
+    if not coletor.vazio:
+        return render_template(
+            "registros/preview/pendencias.html",
+            registro=registro, pendencias=coletor.listar(), gta_source=None,
+            voltar_url=url_for("comercializacao.preview", registro_id=registro.id),
+        )
+
+    comandos = build_commands(plano)
+    return render_template(
+        "comercializacao/preview.html",
+        registro=registro, plano=plano, totais=plano_totais(plano), meta=meta,
+        comandos=comandos, tmp=tmp,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Finalizar: cria o ExecJob
+# ---------------------------------------------------------------------------
+@bp.route("/<int:registro_id>/finalizar", methods=["POST"])
+@login_required
+def finalizar(registro_id: int):
+    registro = _registro_do_usuario(registro_id)
+    if registro.status != "AT":
+        flash("Registro nao esta em aberto para finalizacao.", "warning")
+        return redirect(url_for("comercializacao.lista"))
+
+    cred = MapaCredencial.query.filter_by(owner_user_id=current_user.id).first()
+    if cred is None:
+        flash("Cadastre suas credenciais do MAPA antes de executar (Configuracoes > Credenciais MAPA).", "warning")
+        return redirect(url_for("public.credenciais_mapa"))
+
+    tmp = _vendas_tmp(registro.id)
+    records, _meta = _payload(tmp)
+    if not records:
+        flash("Dados insuficientes para finalizar.", "warning")
+        return redirect(url_for("comercializacao.novo"))
+
+    if ExecJob.query.filter(
+        ExecJob.registro_id == registro.id, ExecJob.status.in_(["ESPERA", "EXECUTANDO"])
+    ).first():
+        flash("Ja existe um job ativo para este registro.", "warning")
+        return redirect(url_for("comercializacao.lista"))
+
+    try:
+        # ultima trava: sem coletor, qualquer termo sem vinculo aborta (nada vai ao portal cru)
+        plano = build_plano(records)
+    except ConstanteNaoMapeada as e:
+        flash(
+            f"Nao foi possivel finalizar: {escape(e.tipo)} sem vinculo ({escape(e.valor)}). "
+            "Cadastre o vinculo em Admin > Constantes e valide novamente.",
+            "danger",
+        )
+        return redirect(url_for("comercializacao.preview", registro_id=registro.id))
+
+    job = ExecJob(
+        registro_id=registro.id,
+        owner_user_id=registro.user_id,
+        gta_source="vendas",
+        commands=build_commands(plano),
+        meta={
+            "modulo": TIPO,
+            "periodo": {"ini": registro.periodo_ini.strftime("%d/%m/%Y"),
+                        "fim": registro.periodo_fim.strftime("%d/%m/%Y")},
+            "numero_sif": cred.numero_sif,
+            "totais": plano_totais(plano),
+        },
+        status="ESPERA", progress=0, errors=[],
+    )
+    db.session.add(job)
+    registro.status = "PT"
+    if tmp is not None:
+        tmp.status = UploadStatus.PROCESSED
+    db.session.commit()
+    get_queue().enqueue(job.id)
+    log_action("job:create", entity="ExecJob", entity_id=job.id, meta={"modulo": TIPO})
+
+    flash("Validacao confirmada. Job enfileirado para execucao.", "success")
+    return redirect(url_for("comercializacao.lista"))

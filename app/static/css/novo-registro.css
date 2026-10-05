@@ -1,0 +1,268 @@
+/* ==========================================================================
+   Tokens básicos (tema claro)
+   ========================================================================== */
+:root {
+  --brand-500: #265dc9;
+  --brand-600: #1f4aa3;
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-2: #f1f4f9;
+  --text: #1f2a37;
+  --muted: #667085;
+  --border: #e5e7eb;
+  --border-strong: #d0d7e2;
+  --focus: #99c2ff;
+  --danger: #e14d4d;
+
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+  --shadow-md: 0 3px 8px rgba(16, 24, 40, .12);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", "Liberation Sans", sans-serif;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.oculto {
+  display: none !important;
+}
+
+.msg-erro {
+  color: var(--danger);
+  margin: 10px 0;
+  font-size: .95rem;
+}
+
+/* ==========================================================================
+   Estruturas desta view
+   ========================================================================== */
+.informacoes-usuario,
+.painel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+}
+
+.painel {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-6);
+}
+
+.titulo-form {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 56px;
+  border-radius: var(--radius-md);
+  background: #d3ebff8f;
+  color: #1a3b83;
+  font-weight: 700;
+  font-size: 1.15rem;
+  box-shadow: var(--shadow-sm);
+  padding: 10px;
+}
+
+.form-completo {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+}
+
+.row {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.sub-titulo-form {
+  text-align: center;
+  width: 100%;
+  font-size: 1.1rem;
+  border-bottom: 1px solid #000;
+  padding-bottom: 6px;
+}
+
+/* Grid 2 colunas a partir de 640px para os campos 
+@media (min-width:640px) {
+  .row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+*/
+/* ==========================================================================
+   Inputs e botões
+   ========================================================================== */
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.form-input-multi {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-input-multi input[type="text"],
+.form-input-multi input[type="date"],
+.form-input-multi select,
+.form-input-multi textarea {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  box-shadow: var(--shadow-sm) inset;
+  transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+}
+
+.form-input-multi textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.form-input-multi input:focus,
+.form-input-multi select:focus,
+.form-input-multi textarea:focus {
+  border-color: #4f84f3;
+  box-shadow: 0 0 0 3px rgba(153, 194, 255, 0.4);
+  outline: none;
+}
+
+.form-submit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* Botões */
+.btn,
+button,
+input[type="submit"],
+input[type="button"] {
+  appearance: none;
+  border: 1px solid var(--brand-500);
+  background: var(--brand-500);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .1s ease, box-shadow .2s ease, border-color .2s ease;
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn:hover,
+button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover {
+  background: var(--brand-600);
+}
+
+.btn:active,
+button:active,
+input[type="submit"]:active,
+input[type="button"]:active {
+  transform: translateY(1px);
+}
+
+.btn--outline {
+  background: #fff;
+  color: var(--brand-600);
+  border-color: var(--border);
+}
+
+.btn--outline:hover {
+  background: #f7faff;
+  border-color: #a8c3ff;
+}
+
+/* ==========================================================================
+   Input de arquivo com visual de botão
+   ========================================================================== */
+.file-custom {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-label {
+  appearance: none;
+  /* herda visual de .btn .btn--outline via HTML */
+}
+
+.file-name {
+  font-size: .95rem;
+  color: var(--muted);
+}
+
+/* ==========================================================================
+   Ajustes legacy
+   ========================================================================== */
+.mini {
+  width: 30%;
+}
+
+.end {
+  justify-content: end;
+}
+
+/* ==========================================================================
+   DARK MODE
+   Estratégia dupla:
+   1) Automático: aplica quando NÃO houver override e o SO estiver em dark
+   2) Manual: html[data-theme="dark"] força escuro, html[data-theme="light"] força claro
+   ========================================================================== */
+
+/* 1) Automático (sem override manual) */

@@ -1,0 +1,157 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>mock portal abate</title>
+<style>.ui-dialog{position:fixed;top:10px;left:10px;display:none;background:#eee}.ui-dialog.open{display:block}</style></head>
+<body>
+<div id="mensagensValidacao"><div class="ui-messages"></div></div>
+<div id="outContent"></div><div id="dialogs"></div>
+<script>
+// Simulador minimo do portal de ABATE para testar app/runner/scripts/scripts.js (ids legados ou trocados).
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('ids') || 'legacy';
+const rnd = {}; let n = 0;
+function J(legacy) {
+  if (MODE === 'legacy') return legacy;
+  if (!rnd[legacy]) rnd[legacy] = 'j_idt' + (Number(legacy.slice(5)) + 4000 + (n++) * 5);
+  return rnd[legacy];
+}
+const P = { sal: J('j_idt673'), esp: J('j_idt664'), espBind: J('j_idt659'), gta: J('j_idt678'), lote: J('j_idt688'),
+            diag: J('j_idt709'), parte: J('j_idt723'), reg: J('j_idt639') };
+const S = window.__server = { view: 'consulta', registros: [], sel: null, unknown: [], saldos: [], lotes: [], diags: [], partes: [],
+  especie: null, ufs: [], cur: {}, finalizado: 0, keep: null, empSel: null, empresa: null, diagSel: null, espSel: null };
+let pending = 0;
+function setMsg(sev, t) { document.querySelector('#mensagensValidacao .ui-messages').innerHTML = t ? `<div class="ui-messages-${sev}"><ul><li><span>${t}</span></li></ul></div>` : ''; }
+const val = (id) => document.getElementById(id).value;
+const UFS = ['', 'AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC'];
+
+function render() {
+  const out = document.getElementById('outContent');
+  // o portal real so re-renderiza o que o ajax manda atualizar: preserva o que foi digitado
+  const keep = {}; out.querySelectorAll('input[id],select[id]').forEach(e => keep[e.id] = e.value);
+  if (S.view === 'consulta') {
+    const F = 'formConsultarMapaAbate';
+    const rows = S.registros.filter(r => r.match).map(r =>
+      `<tr data-rk="[id=${r.id}&excluido=${r.excluido ? 'S' : 'N'}]"><td><div class="ui-radiobutton-box" onclick="S.sel=${r.id}"></div></td><td>${r.data}</td></tr>`).join('');
+    const vazio = S.consultou && !S.registros.some(r => r.match) ? '<tr><td colspan="2">Nenhum registro encontrado.</td></tr>' : '';
+    out.innerHTML = `<form id="${F}"><input id="${F}:dataAbate:dataAbate_input"><select id="${F}:cbbAbate:cbbAbate_input"><option value="">-</option><option value="S">S</option></select>
+      <button type="button" id="${F}:${J('j_idt80')}:mapaAbate:commandQuery_mapaAbate">q</button>
+      <button type="button" id="${F}:${J('j_idt80')}:${J('j_idt83')}:commandPrepareInsert_${J('j_idt83')}">n</button>
+      <button type="button" id="${F}:${J('j_idt115')}:${J('j_idt118')}:commandPrepareUpdate_${J('j_idt118')}">a</button>
+      <table><tbody id="${F}:datatable_x_data" class="ui-datatable-data">${rows}${vazio}</tbody></table></form>`;
+    if (S.keep) document.getElementById(`${F}:dataAbate:dataAbate_input`).value = S.keep;
+  } else if (S.view === 'incluir') {
+    const F = 'formIncluirMapaAbate';
+    out.innerHTML = `<form id="${F}"><input id="${F}:dataAbate:dataAbate_input"><select id="${F}:cbbAbate:cbbAbate_input"><option value="">-</option><option value="S">S</option></select>
+      <button type="button" id="${F}:numeroRegistro:commandSearch_numeroRegistro">e</button><span>emp:${S.empresa || '-'}</span>
+      <button type="button" id="${F}:${J('j_idt358')}:${J('j_idt359')}:commandInsert_${J('j_idt359')}">i</button></form>`;
+  } else {
+    const F = 'formAlterarMapaAbate';
+    out.innerHTML = `<form id="${F}">
+      <button type="button" id="${F}:dtbSaldos:btnNovoSaldo">novo saldo</button>
+      <table>${S.saldos.map((g, i) => `<tr><td>${g.nGta}</td><td><button type="button" id="${F}:dtbSaldos:${i}:commandAdd_inserirLote">lote</button>
+         <button type="button" id="${F}:dtbSaldos:${i}:commandEventRemove_Lote">x</button></td></tr>`).join('')}</table>
+      <table>${S.lotes.map((l, i) => `<tr><td>${l.lote}</td><td><button type="button" id="${F}:dtbLoteAbate:${i}:commandAdd_inserirDoenca">d</button></td></tr>`).join('')}</table>
+      <table>${S.diags.map((d, i) => `<tr><td>${d.nome}</td><td><button type="button" id="${F}:dtbDoenca:${i}:commandAdd_inserirParteAfetada">p</button></td></tr>`).join('')}</table>
+      <button type="button" id="${F}:${J('j_idt457')}:${J('j_idt458')}:commandUpdate_${J('j_idt458')}">salvar</button></form>`;
+  }
+}
+const _render = render;
+render = function () { const out = document.getElementById('outContent'); const keep = {};
+  out.querySelectorAll('input[id],select[id]').forEach(e => keep[e.id] = e.value);
+  _render(); out.querySelectorAll('input[id],select[id]').forEach(e => { if (keep[e.id] !== undefined) e.value = keep[e.id]; }); };
+const sel = (opts) => opts.map((o, i) => `<option value="${i}">${o}</option>`).join('');
+function dialogs() {
+  document.getElementById('dialogs').innerHTML = `
+  <div class="ui-dialog" id="d_saldo">
+    <form id="${P.sal}:frmDialog"><button type="button" id="${P.sal}:frmDialog:especie:commandSearch_especie">esp</button></form>
+    <form id="${P.gta}:frmDialog">
+      <select id="${P.gta}:frmDialog:cbbUfSaldo:cbbUfSaldo_input">${sel(UFS)}</select>
+      <input id="${P.gta}:frmDialog:numeroGta:numeroGta"><input id="${P.gta}:frmDialog:numeroSerie:numeroSerie">
+      <input id="${P.gta}:frmDialog:quantidadeMachos:quantidadeMachos"><input id="${P.gta}:frmDialog:quantidadeFemeas:quantidadeFemeas">
+      <button type="button" id="${P.gta}:frmDialog:${J('j_idt685')}:${J('j_idt686')}:commandDialogAdd_${J('j_idt686')}">ok</button></form></div>
+  <div class="ui-dialog" id="d_esp">
+    <form id="${P.esp}:frmDialog"><input id="${P.esp}:frmDialog:codigoEspecie:codigoEspecie">
+      <button type="button" id="${P.esp}:frmDialog:${J('j_idt666')}:${J('j_idt667')}:commandDialogQuery_${J('j_idt667')}">q</button>
+      <table><tbody class="ui-datatable-data" id="${P.esp}:frmDialog:res"></tbody></table></form>
+    <form id="${P.espBind}:frmDialog"><button type="button" id="${P.espBind}:frmDialog:${J('j_idt670')}:${J('j_idt671')}:commandDialogBind_${J('j_idt671')}">b</button></form></div>
+  <div class="ui-dialog" id="d_lote"><form id="${P.lote}:frmDialog">
+      <select id="${P.lote}:frmDialog:tipoLote:tipoLote_input">${sel(['-', 'Normal', 'Morto', 'Emergência'])}</select>
+      <input id="${P.lote}:frmDialog:numeroLote:numeroLote"><input id="${P.lote}:frmDialog:qtdMacho:qtdMacho"><input id="${P.lote}:frmDialog:pesoMM_hinput" type="hidden">
+      <input id="${P.lote}:frmDialog:qtdFemea:qtdFemea"><input id="${P.lote}:frmDialog:pesoMF_hinput" type="hidden">
+      <button type="button" id="${P.lote}:frmDialog:${J('j_idt706')}:${J('j_idt707')}:commandDialogAdd_${J('j_idt707')}">ok</button></form></div>
+  <div class="ui-dialog" id="d_diag"><form id="${P.diag}:frmDialog"><input id="${P.diag}:frmDialog:nomeDiagnostico:nomeDiagnostico">
+      <button type="button" id="${P.diag}:frmDialog:${J('j_idt712')}:${J('j_idt713')}:commandDialogQuery_${J('j_idt713')}">q</button>
+      <table><tbody class="ui-datatable-data" id="${P.diag}:frmDialog:res"></tbody></table>
+      <input type="radio" name="${P.diag}:frmDialog:resultado:datatable_resultado_radio" onclick="S.diagRadio=true">
+      <input id="${P.diag}:frmDialog:quantidadeAnimaisAcometidos:quantidadeAnimaisAcometidos">
+      <button type="button" id="${P.diag}:frmDialog:${J('j_idt720')}:${J('j_idt721')}:commandDialogAdd_${J('j_idt721')}">ok</button></form></div>
+  <div class="ui-dialog" id="d_parte"><form id="${P.parte}:frmDialog">
+      <select id="${P.parte}:frmDialog:parteAnimalAfetada:parteAnimalAfetada_input">${sel(['-', 'Carcaça', 'Fígado'])}</select>
+      <input id="${P.parte}:frmDialog:numeroPartesAfetadas:numeroPartesAfetadas">
+      <select id="${P.parte}:frmDialog:cbbDestino:cbbDestino_input">${sel(['-', 'Liberado', 'Condenação'])}</select>
+      <button type="button" id="${P.parte}:frmDialog:${J('j_idt729')}:${J('j_idt730')}:commandDialogAdd_${J('j_idt730')}">ok</button></form></div>
+  <div class="ui-dialog" id="d_reg"><form id="${P.reg}:frmDialog"><input id="${P.reg}:frmDialog:numeroRegistro:numeroRegistro">
+      <button type="button" id="${P.reg}:frmDialog:${J('j_idt646')}:${J('j_idt647')}:commandDialogQuery_${J('j_idt647')}">q</button>
+      <table><tbody class="ui-datatable-data" id="${P.reg}:frmDialog:res"></tbody></table>
+      <button type="button" id="${P.reg}:frmDialog:${J('j_idt661')}:${J('j_idt662')}:commandDialogBind_${J('j_idt662')}">b</button></form></div>`;
+}
+const DLG = { dlgIncluirSaldo: 'd_saldo', dlgPesquisarEspecie: 'd_esp', dlgInserirLote: 'd_lote', dlgVincularDoenca: 'd_diag',
+              dlgIncluirPartesAfetadas: 'd_parte', dlgPesquisarRegistro: 'd_reg' };
+window.PF = (w) => { const id = DLG[w]; if (!id) throw new Error('widget ' + w);
+  const e = () => document.getElementById(id);
+  return { show() { e().classList.add('open'); }, hide() { e().classList.remove('open'); } }; };
+window.PrimeFaces = { ajax: { Queue: { isEmpty: () => pending === 0 } },
+  ab(cfg) { pending++; setTimeout(() => { try { handle(cfg); } catch (e) { S.unknown.push('EXC ' + e.message); } pending--;
+    const k = document.getElementById('formConsultarMapaAbate:dataAbate:dataAbate_input'); if (k) S.keep = k.value; render(); if (S.view==='consulta' && S.keep) document.getElementById('formConsultarMapaAbate:dataAbate:dataAbate_input').value = S.keep;
+    if (cfg.onco) cfg.onco(); }, 6); } };
+
+function handle(cfg) {
+  const s = cfg.s || '', is = (re) => re.test(s);
+  if (!document.getElementById(s)) { S.unknown.push(s); setMsg('error', 'fonte inexistente ' + s); return; }
+  if (is(/commandQuery_mapaAbate$/)) { const d = val('formConsultarMapaAbate:dataAbate:dataAbate_input'); S.keep = d; S.consultou = true; setMsg('error', '');
+    S.registros.forEach(r => r.match = r.data === d); return; }
+  if (is(/commandPrepareInsert_/)) { S.view = 'incluir'; S.empresa = null; return; }
+  if (is(/commandPrepareUpdate_/)) { if (!S.sel) return setMsg('error', 'sem selecao'); S.view = 'alterar'; return; }
+  if (is(/formIncluirMapaAbate:numeroRegistro:commandSearch/)) return;
+  if (is(new RegExp(P.reg + ':frmDialog:.*commandDialogQuery_'))) { const n = val(`${P.reg}:frmDialog:numeroRegistro:numeroRegistro`);
+    document.getElementById(`${P.reg}:frmDialog:res`).innerHTML = `<tr><td><div class="ui-radiobutton-box" onclick="S.empSel='${n}'"></div></td></tr>`; return; }
+  if (is(new RegExp(P.reg + ':frmDialog:.*commandDialogBind_'))) { S.empresa = S.empSel; return; }
+  if (is(/commandInsert_/)) { if (!S.empresa) return setMsg('error', 'Informe a empresa');
+    const d = val('formIncluirMapaAbate:dataAbate:dataAbate_input');
+    if (!d || val('formIncluirMapaAbate:cbbAbate:cbbAbate_input') !== 'S') return setMsg('error', 'Dados obrigatórios');
+    S.registros.push({ id: 700 + S.registros.length, data: d, match: true }); S.view = 'consulta'; setMsg('info', 'Registro incluído com sucesso.'); return; }
+  if (is(/dtbSaldos:btnNovoSaldo$/)) return;
+  if (is(new RegExp(P.sal + ':frmDialog:especie:commandSearch_especie$'))) return;
+  if (is(new RegExp(P.esp + ':frmDialog:.*commandDialogQuery_'))) { const c = val(`${P.esp}:frmDialog:codigoEspecie:codigoEspecie`);
+    document.getElementById(`${P.esp}:frmDialog:res`).innerHTML = `<tr><td><div class="ui-radiobutton-box" onclick="S.espSel='${c}'"></div></td></tr>`; return; }
+  if (is(new RegExp(P.espBind + ':frmDialog:.*commandDialogBind_'))) { S.especie = S.espSel; return; }
+  if (is(new RegExp(P.gta + ':frmDialog:.*commandDialogAdd_'))) {
+    const uf = Number(val(`${P.gta}:frmDialog:cbbUfSaldo:cbbUfSaldo_input`));
+    if (!S.especie) return setMsg('error', 'Espécie obrigatória');
+    S.saldos.push({ uf: UFS[uf], nGta: val(`${P.gta}:frmDialog:numeroGta:numeroGta`), serie: val(`${P.gta}:frmDialog:numeroSerie:numeroSerie`),
+      machos: val(`${P.gta}:frmDialog:quantidadeMachos:quantidadeMachos`), femeas: val(`${P.gta}:frmDialog:quantidadeFemeas:quantidadeFemeas`) });
+    document.getElementById('d_saldo').classList.remove('open'); return; }
+  let m;
+  if ((m = s.match(/dtbSaldos:(\d+):commandAdd_inserirLote$/))) { S.cur.saldo = Number(m[1]); return; }
+  if (is(new RegExp(P.lote + ':frmDialog:.*commandDialogAdd_'))) {
+    S.lotes.push({ saldo: S.cur.saldo, tipo: val(`${P.lote}:frmDialog:tipoLote:tipoLote_input`), lote: val(`${P.lote}:frmDialog:numeroLote:numeroLote`),
+      qm: val(`${P.lote}:frmDialog:qtdMacho:qtdMacho`), pm: val(`${P.lote}:frmDialog:pesoMM_hinput`), qf: val(`${P.lote}:frmDialog:qtdFemea:qtdFemea`), pf: val(`${P.lote}:frmDialog:pesoMF_hinput`) });
+    document.getElementById('d_lote').classList.remove('open'); return; }
+  if ((m = s.match(/dtbLoteAbate:(\d+):commandAdd_inserirDoenca$/))) { S.cur.lote = Number(m[1]); S.diagSel = null; S.diagRadio = false; return; }
+  if (is(new RegExp(P.diag + ':frmDialog:.*commandDialogQuery_'))) { const c = val(`${P.diag}:frmDialog:nomeDiagnostico:nomeDiagnostico`);
+    document.getElementById(`${P.diag}:frmDialog:res`).innerHTML = `<tr><td><div class="ui-radiobutton-box" onclick="S.diagSel='${c}'"></div></td></tr>`; return; }
+  if (is(new RegExp(P.diag + ':frmDialog:.*commandDialogAdd_'))) {
+    if (!S.diagSel) return setMsg('error', 'Diagnóstico obrigatório');
+    S.diags.push({ lote: S.cur.lote, nome: S.diagSel, qtd: val(`${P.diag}:frmDialog:quantidadeAnimaisAcometidos:quantidadeAnimaisAcometidos`) });
+    document.getElementById('d_diag').classList.remove('open'); return; }
+  if ((m = s.match(/dtbDoenca:(\d+):commandAdd_inserirParteAfetada$/))) { S.cur.diag = Number(m[1]); return; }
+  if (is(new RegExp(P.parte + ':frmDialog:.*commandDialogAdd_'))) {
+    S.partes.push({ diag: S.cur.diag, parte: val(`${P.parte}:frmDialog:parteAnimalAfetada:parteAnimalAfetada_input`),
+      qtd: val(`${P.parte}:frmDialog:numeroPartesAfetadas:numeroPartesAfetadas`), destino: val(`${P.parte}:frmDialog:cbbDestino:cbbDestino_input`) });
+    document.getElementById('d_parte').classList.remove('open'); return; }
+  if (is(/commandUpdate_/)) { S.finalizado++; return; }
+  if (is(/commandEventRemove_Lote$/)) { const i = Number(s.match(/dtbSaldos:(\d+):/)[1]); S.saldos.splice(i, 1); return; }
+  S.unknown.push('SEM_HANDLER ' + s);
+}
+window.__seed = (regs) => { S.registros = regs; render(); };
+dialogs(); render();
+</script></body></html>

@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Preview Geral{% endblock %}
+{% block main %}
+<div class="painel preview-panel">
+  <h2 class="titulo-form" style="padding:12px; border-radius:10px;">Preview Geral</h2>
+
+  <div class="mini-painel">
+    <div class="mini-painel-item">
+      <div class="circulo-info">
+        <div class="numero-circulo">{{ totais.gta_animais }}</div>
+      </div>
+      <div class="texto-painel">Total de animais (GTA)</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info">
+        <div class="numero-circulo">{{ totais.dif_itens }}</div>
+      </div>
+      <div class="texto-painel">Itens DIF</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info">
+        <div class="numero-circulo">{{ totais.sif_itens }}</div>
+      </div>
+      <div class="texto-painel">Itens SIF</div>
+    </div>
+  </div>
+
+  <div class="alert" style="margin-top:12px;">
+    <div class="alert__icon">ℹ️</div>
+    <div class="alert__content">
+      Fonte de GTA selecionada: <strong>{{ 'Upload' if gta_source == 'upload' else 'Formulário' }}</strong>.
+      {% if mismatch %}
+      <div class="msg-erro" style="margin-top:8px;">Observação: você permitiu seguir com lotes divergentes.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" type="button" onclick="showTab('tab-gta', this)">GTA</button>
+    <button class="tab-btn" type="button" onclick="showTab('tab-dif', this)">DIF</button>
+    <button class="tab-btn" type="button" onclick="showTab('tab-sif', this)">SIF</button>
+    <button class="tab-btn" type="button" onclick="showTab('tab-commands', this)">Comandos</button>
+  </div>
+
+  <div class="preview-body">
+    <div id="tab-gta" class="tab-pane active">
+      <div class="table-scroll">
+        <table class="tabela-registros">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Nº GTA</th>
+              <th>Série</th>
+              <th>Machos</th>
+              <th>Fêmeas</th>
+              <th>Total</th>
+              <th>Lote</th>
+              <th>Peso médio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in gta_records %}
+            <tr>
+              <td>{{ r.data or '—' }}</td>
+              <td>{{ r.numero_gta }}</td>
+              <td>{{ r.serie }}</td>
+              <td>{{ r.machos }}</td>
+              <td>{{ r.femeas }}</td>
+              <td>{{ r.total }}</td>
+              <td>{{ r.lote }}</td>
+              <td>{{ '%.2f'|format(r.peso_medio) if r.peso_medio is not none else '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-dif" class="tab-pane">
+      <div class="table-scroll">
+        <table class="tabela-registros">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Parte afetada</th>
+              <th>Destino</th>
+              <th>Quantidade</th>
+              <th>Lote</th>
+              <th>Emergência</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in dif_records %}
+            <tr>
+              <td>{{ r.descricao }}</td>
+              <td>{{ r['parte afetada'] or r.parte or '—' }}</td>
+              <td>{{ r.destino }}</td>
+              <td>{{ r.quantidade }}</td>
+              <td>{{ r.lote }}</td>
+              <td>{{ r.emergencia }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-sif" class="tab-pane">
+      <div class="table-scroll">
+        <table class="tabela-registros">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th>Parte afetada</th>
+              <th>Destino</th>
+              <th>Quantidade</th>
+              <th>Lote</th>
+              <th>Emergência</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in sif_records %}
+            <tr>
+              <td>{{ r.descricao }}</td>
+              <td>{{ r['parte afetada'] or r.parte or '—' }}</td>
+              <td>{{ r.destino }}</td>
+              <td>{{ r.quantidade }}</td>
+              <td>{{ r.lote }}</td>
+              <td>{{ r.emergencia }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-commands" class="tab-pane">
+      <div class="alert" style="margin-bottom: 12px;">
+        <div class="alert__icon">🧭</div>
+        <div class="alert__content">
+          Plano de execução no navegador (Selenium). Ajuste os mapeamentos de índices e constantes conforme necessário.
+        </div>
+      </div>
+      <div class="table-scroll">
+        <pre
+          style="white-space: pre-wrap; background: var(--surface-2); border:1px solid var(--border); padding:12px; border-radius:10px;">
+{% for c in comandos %}{{ c }}
+{% endfor %}
+        </pre>
+      </div>
+    </div>
+    <form action="{{ url_for('registros.finalizar_validacao', registro_id=registro.id) }}" method="post">
+      <button class="btn" type="submit">Confirmar & Executar</button>
+      <a href="{{ url_for('registros.incluir_dados', registro_id=registro.id)}}" target="_blank"
+        rel="noopener noreferrer"></a>
+    </form>
+  </div>
+</div>
+<script>
+  function showTab(id, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+</script>
+{% endblock %}

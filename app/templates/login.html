@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block main %}
+<div class="form-login">
+    <form method="post" action="{{ url_for('auth.login') }}" >
+        <div class="form-label">
+            <label>Login</label>
+        </div>
+        <div class="form-input">
+            <input type="text" name="nome" id="nome" placeholder="Nome">
+        </div>
+        <div class="form-input">
+            <input type="password" name="senha" id="senha" placeholder="Senha">
+        </div>
+        <div class="form-input">
+            <input type="submit" name="" id="" placeholder="Enviar">
+        </div>
+        <div class="form-ancora">
+            <a href="">Esqueceu senha?</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

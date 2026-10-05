@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Principal{% endblock %}
+{% block main %}
+<div class="menu-lateral">
+    <!-- Itens principais do menu lateral -->
+    <a class="item-menu" href="{{ url_for('public.main') }}">
+        <i class="fa fa-home"></i>
+        <span>Início</span>
+    </a>
+    <a class="item-menu" href="#">
+        <i class="fa fa-user"></i>
+        <span>Perfil</span>
+    </a>
+
+    <!-- Dropdown para Registros -->
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-list"></i>
+            <span>Registros</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="sub-item" href="{{ url_for('registros.prontos') }}">Pronto</a></li>
+            <li><a class="sub-item" href="{{ url_for('registros.novo') }}">Novo</a></li>
+        </ul>
+    </div>
+
+    <!-- Dropdown para Comercialização -->
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-truck"></i>
+            <span>Comercialização</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="sub-item" href="{{ url_for('comercializacao.lista') }}">Registros</a></li>
+            <li><a class="sub-item" href="{{ url_for('comercializacao.novo') }}">Nova planilha</a></li>
+        </ul>
+    </div>
+
+    <!-- Dropdown para Lançamentos -->
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-rocket"></i>
+            <span>Lançamentos</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <a class="sub-item" href="{{ url_for('public.dados_api') }}">Dados API</a>
+            <a class="sub-item" href="{{ url_for('registros.historico') }}">Histórico</a>
+            <li><a class="sub-item" href="{{ url_for('public.dashboard') }}">Dashboard</a></li>
+        </ul>
+    </div>
+
+    <!-- Dropdown para Configurações -->
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-cog"></i>
+            <span>Configurações</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="sub-item" href="{{ url_for('public.credenciais_mapa') }}">Credenciais MAPA</a></li>
+        </ul>
+    </div>
+
+    <!-- Dropdown para Admin (apenas se admin) -->
+    {% if current_user.is_admin %}
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-shield"></i>
+            <span>Admin</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="sub-item" href="{{ url_for('admin.index') }}">Painel</a></li>
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<section class="painel">
+    <!-- Indicadores (mantidos como estão) -->
+    {% block mini_painel %}
+    <div class="mini-painel">
+        <div class="mini-painel-item">
+            <div class="circulo-info"><span class="numero-circulo">{{ finalizados }}</span></div>
+            <div>
+                <div class="texto-painel">Lançamentos finalizados</div>
+                <small class="blue">Concluídos</small>
+            </div>
+        </div>
+        <div class="mini-painel-item">
+            <div class="circulo-info"><span class="numero-circulo">{{ pendentes }}</span></div>
+            <div>
+                <div class="texto-painel">Lançamentos pendentes</div>
+                <small class="blue">Aguardando ação</small>
+            </div>
+        </div>
+        <div class="mini-painel-item">
+            <div class="circulo-info"><span class="numero-circulo">{{ andamento }}</span></div>
+            <div>
+                <div class="texto-painel">Lançamentos em andamento</div>
+                <small class="blue">Processando</small>
+            </div>
+        </div>
+        <div class="mini-painel-item">
+            <div class="circulo-info"><span class="numero-circulo">{{ erros }}</span></div>
+            <div>
+                <div class="texto-painel">Erros</div>
+                <small class="blue">Atenção necessária</small>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+    <!-- Nova seção: Outras Informações (liberação da área dos atalhos antigos) -->
+    <div class="outras-informacoes">
+        {% block content %}
+        {% endblock %}
+    </div>
+</section>
+
+
+<!-- JavaScript para toggle dos dropdowns -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const dropdownToggles = document.querySelectorAll('.dropdown-toggle');
+
+        dropdownToggles.forEach(toggle => {
+            toggle.addEventListener('click', function (e) {
+                e.preventDefault(); // Impede navegação se o link tiver href="#"
+                const dropdown = this.parentElement;
+                const isOpen = dropdown.classList.contains('open');
+
+                // Fecha todos os outros dropdowns abertos
+                document.querySelectorAll('.dropdown.open').forEach(openDropdown => {
+                    if (openDropdown !== dropdown) {
+                        openDropdown.classList.remove('open');
+                    }
+                });
+
+                // Toggle o dropdown atual
+                if (isOpen) {
+                    dropdown.classList.remove('open');
+                } else {
+                    dropdown.classList.add('open');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

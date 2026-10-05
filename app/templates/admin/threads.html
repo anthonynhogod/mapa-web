@@ -1,0 +1,240 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin — Controle de Threads{% endblock %}
+{% block content %}
+
+        <h2>Iniciar Novo Processo</h2>
+        <form method="POST" action="{{ url_for('admin.threads') }}">
+            <div class="row grid-2" style="margin-bottom: 10px;">
+                <div class="form-input-multi">
+                    <label for="numero" class="form-label">Número de Threads:</label>
+                    <input type="number" id="numero" name="numero" min="1" max="10" required placeholder="Ex.: 2">
+                </div>
+                <div class="form-input-multi">
+                    <label for="profile" class="form-label">Perfil:</label>
+                    <select name="profile" id="profile">
+                        <option value="">Selecione...</option>
+                        <option value="prod">Prod (Headless Ultra)</option>
+                        <option value="test">Testes (GUI Rápido)</option>
+                        <option value="dev">Dev (GUI Balanceado)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label><input type="checkbox" name="force_restart"> Forçar reinício (reinicia mesmo se houver
+                        workers ativos)</label>
+                </div>
+                <div class="form-input-multi">
+                    <button type="submit">Iniciar Workers</button>
+                </div>
+            </div>
+        </form>
+        <h2>Workers (Ativos e Parados)</h2>
+        {% if active_processes %}
+        <table border="1" style="width: 100%; border-collapse: collapse;" class="tabela-registros">
+            <thead>
+                <tr>
+                    <th>ID do Worker</th>
+                    <th>Nome</th>
+                    <th>Perfil</th>
+                    <th>Threads</th>
+                    <th>Status</th>
+                    <th>Iniciado em</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody id="active-processes-tbody">
+                {% for worker in active_processes %}
+                <tr>
+                    <td>{{ worker.id }}</td>
+                    <td>{{ worker.name }}</td>
+                    <td>{{ worker.profile }}</td>
+                    <td>{{ worker.threads }}</td>
+                    <td>{{ worker.status }}</td>
+                    <td>{{ worker.started_at }}</td>
+                    <td>
+                        {% if worker.status == "EXECUTANDO" %}
+                        <form method="POST" action="{{ url_for('admin.stop_thread', worker_id=worker.id) }}"
+                            style="display:inline;">
+                            <button type="submit" onclick="return confirm('Parar este worker?')">Parar</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('admin.force_stop_thread', worker_id=worker.id) }}"
+                            style="display:inline;">
+                            <button type="submit"
+                                onclick="return confirm('Finalizar completamente este worker?')">Finalizar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Nenhum worker encontrado.</p>
+        {% endif %}
+        <h2>Jobs Pendentes</h2>
+        {% if rows %}
+        <table border="1" style="width: 100%; border-collapse: collapse;" class="tabela-registros">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Status</th>
+                    <th>Progresso</th>
+                    <th>Início</th>
+                    <th>Fim</th>
+                    <th>Erros</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="pending-jobs-tbody">
+                {% for job in rows %}
+                <tr>
+                    <td>{{ job.id }}</td>
+                    <td>{{ job.status }}</td>
+                    <td>{{ job.progress }}%</td>
+                    <td>{{ job.started_at or 'N/A' }}</td>
+                    <td>{{ job.finished_at or 'N/A' }}</td>
+                    <td>
+                        {% if job.errors %}
+                        <details>
+                            <summary>{{ job.errors|length }} erro(s)</summary>
+                            <pre style="white-space:pre-wrap; max-width: 480px;">{% for e in job.errors %}{{ e }}
+{% endfor %}</pre>
+                        </details>
+                        {% else %}
+                        —
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if job.status == "FALHOU" %}
+                        <form method="POST" action="{{ url_for('admin.retry_job', job_id=job.id) }}"
+                            style="display:inline;">
+                            <button type="submit"
+                                onclick="return confirm('Re-enfileirar este job FALHOU para ESPERA? O histórico de erros atual será limpo.')">Retry</button>
+                        </form>
+                        {% if job.meta and job.meta.get('modulo') == 'comercializacao' %}
+                        <form method="POST" action="{{ url_for('admin.retry_job', job_id=job.id) }}"
+                            style="display:inline;">
+                            <input type="hidden" name="limpar" value="1">
+                            <button type="submit"
+                                onclick="return confirm('Limpar TODAS as transações do registro no portal e relançar do zero?')">Retry (limpando portal)</button>
+                        </form>
+                        {% endif %}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p>Nenhum job pendente.</p>
+        {% endif %}
+{% endblock %}
+{% block script %}
+<script>
+    // Função para atualizar processos ativos
+    async function updateActiveProcesses() {
+        try {
+            const response = await fetch('/admin/api/workers');
+            const data = await response.json();
+            const tbody = document.querySelector('#active-processes-tbody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            for (const [workerId, workerData] of Object.entries(data.workers)) {
+                const actions = workerData.status === 'EXECUTANDO'
+                    ? `<form method="POST" action="/admin/stop-thread/${workerId}" style="display:inline;">
+                    <button type="submit" onclick="return confirm('Parar este worker?')">Parar</button>
+                  </form>`
+                    : '';
+                const row = `
+                <tr>
+                    <td>${workerId}</td>
+                    <td>${workerData.name}</td>
+                    <td>${workerData.profile}</td>
+                    <td>${workerData.threads}</td>
+                    <td>${workerData.status}</td>
+                    <td>${new Date(workerData.started_at * 1000).toLocaleString()}</td>
+                    <td>
+                        ${actions}
+                        <form method="POST" action="/admin/force-stop-thread/${workerId}" style="display:inline;">
+                            <button type="submit" onclick="return confirm('Finalizar completamente este worker?')">Finalizar</button>
+                        </form>
+                    </td>
+                </tr>
+            `;
+                tbody.innerHTML += row;
+            }
+        } catch (error) {
+            console.error('Erro ao atualizar workers:', error);
+        }
+    }
+    // Escapa texto antes de jogar em innerHTML (mensagens de erro podem vir
+    // do site do MAPA / do console JS e não devem ser tratadas como HTML).
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str == null ? '' : String(str);
+        return div.innerHTML;
+    }
+
+    // Função para atualizar jobs pendentes
+    async function updatePendingJobs() {
+        try {
+            const response = await fetch('/admin/api/pending-jobs');
+            const data = await response.json();
+            const tbody = document.querySelector('#pending-jobs-tbody');
+            if (!tbody) {
+                return;
+            }
+            tbody.innerHTML = '';  // Limpa a tabela
+            data.pending_jobs.forEach(job => {
+                const retryBtn = job.status === 'FALHOU' ?
+                    `<form method="POST" action="/admin/retry-job/${job.id}" style="display:inline;">
+                        <button type="submit" onclick="return confirm('Re-enfileirar este job? O histórico de erros atual será limpo.')">Retry</button>
+                    </form>` + (job.modulo === 'comercializacao' ? `
+                    <form method="POST" action="/admin/retry-job/${job.id}" style="display:inline;">
+                        <input type="hidden" name="limpar" value="1">
+                        <button type="submit" onclick="return confirm('Limpar TODAS as transações do registro no portal e relançar do zero?')">Retry (limpando portal)</button>
+                    </form>` : '') : 'N/A';
+
+                const errors = Array.isArray(job.errors) ? job.errors : [];
+                const errorsCell = errors.length
+                    ? `<details>
+                            <summary>${errors.length} erro(s)</summary>
+                            <pre style="white-space:pre-wrap; max-width:480px;">${escapeHtml(errors.join('\n\n'))}</pre>
+                       </details>`
+                    : '—';
+
+                const row = `
+                    <tr>
+                        <td>${job.id}</td>
+                        <td>${job.status}</td>
+                        <td>${job.progress}%</td>
+                        <td>${job.started_at ? new Date(job.started_at).toLocaleString() : 'N/A'}</td>
+                        <td>${job.finished_at ? new Date(job.finished_at).toLocaleString() : 'N/A'}</td>
+                        <td>${errorsCell}</td>
+                        <td>${retryBtn}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        } catch (error) {
+            console.error('Erro ao atualizar jobs:', error);
+        }
+    }
+
+    // Atualiza automaticamente a cada 10 segundos
+    setInterval(() => {
+        updateActiveProcesses();
+        updatePendingJobs();
+    }, 10000);
+
+    // Atualiza na carga inicial da página
+    document.addEventListener('DOMContentLoaded', () => {
+        updateActiveProcesses();
+        updatePendingJobs();
+    });
+</script>
+{% endblock %}

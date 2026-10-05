@@ -1,0 +1,35 @@
+{% extends "admin/layout.html" %}
+{% block title %}Usuários{% endblock %}
+{% block content %}
+<div class="row" style="justify-content: space-between; align-items: center;">
+  <h2 class="titulo-form" style="margin:0;">Gerenciar Usuários</h2>
+</div>
+
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nome</th>
+        <th>Papel</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td>{{ u.nome }}</td>
+        <td>{{ (u.role.value if u.role else 'USER') }}</td>
+        <td>{{ 'Ativo' if u.is_active else 'Inativo' }}</td>
+        <td class="acoes">
+          <a class="btn btn--outline btn--table" href="{{ url_for('admin.users_edit', user_id=u.id) }}">Editar usuário
+            #{{ u.id }}</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

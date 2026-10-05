@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/novo-registro.css')}}">
+{% endblock %}
+
+{% block title %}Novo Registro{% endblock %}
+
+{% block main %}
+<div class="painel">
+    <div class="titulo-form">
+        Incluir GTA
+    </div>
+
+    <div class="form-completo">
+        <form action="{{ url_for('registros.incluir_gta', registro_id=registro.id) }}" method="post">
+
+            <!-- Título -->
+            <div class="row grid-1">
+                <div class="sub-titulo-form">Dados GTAS:</div>
+            </div>
+
+            <!-- Campos iniciais -->
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label for="gta-data" class="form-label">Data do Registro ativo:</label>
+                </div>
+                <div class="form-input-multi">
+                    <input type="text" id="gta-data" placeholder="{{ registro.data.strftime('%d/%m/%Y') }}" disabled>
+                </div>
+            </div>
+
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label for="ngta" class="form-label">Número Gta:</label>
+                    <input type="number" id="ngta" name="ngta" min="1" step="1"
+                        value="{{ request.form.get('ngta','') }}" required>
+                </div>
+                <div class="form-input-multi">
+                    <label for="serie" class="form-label">Série:</label>
+                    <input type="text" id="serie" name="serie" maxlength="4" value="{{ request.form.get('serie','') }}"
+                        required>
+                </div>
+            </div>
+
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label for="machos" class="form-label">Número de Machos:</label>
+                    <input type="number" step="1" id="machos" name="machos" required>
+                </div>
+                <div class="form-input-multi">
+                    <label for="femeas" class="form-label">Número de Fêmeas:</label>
+                    <input type="number" step="1" id="femeas" name="femeas" required>
+                </div>
+            </div>
+
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label for="lote" class="form-label">Lote:</label>
+                    <input type="number" id="lote" name="lote" min="0" step="1"
+                        value="{{ request.form.get('lote','') }}" required>
+                </div>
+                <div class="form-input-multi">
+                    <label for="peso" class="form-label">Peso:</label>
+                    <input type="text" class="money" id="peso" name="peso" value="{{ request.form.get('peso','') }}" required>
+                </div>
+            </div>
+
+            <div class="row grid-3">
+                <div class="msg-erro">
+                    {% with messages = get_flashed_messages(with_categories=True) %}
+                    {% if messages %}
+                    <ul class="flashes">
+                        {% for category, message in messages %}
+                        <li class="{{ category }}">{{ message }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+                <div class="form-submit">
+                    <a class="btn" href="{{ url_for('registros.incluir_dados', registro_id=registro.id) }}">Voltar</a>
+                </div>
+                <div class="form-submit">
+                    <input type="submit" value="Incluir GTA" class="btn btn-primary btn-validar-dia">
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="sub-titulo-form" style="margin-top: 24px;">GTAs já cadastradas</div>
+
+    <!-- Opcional: tabela com GTAs já incluídas -->
+    {% if registro.gtas %}
+    <div class="table-scroll">
+        <table class="tabela-registros">
+            <thead>
+                <tr>
+                    <th>Número</th>
+                    <th>Série</th>
+                    <th>Machos</th>
+                    <th>Fêmeas</th>
+                    <th>Lote</th>
+                    <th>Peso</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in registro.gtas %}
+                <tr>
+                    <td>{{ g.numero }}</td>
+                    <td>{{ g.serie }}</td>
+                    <td>{{ g.machos }}</td>
+                    <td>{{ g.femeas }}</td>
+                    <td>{{ g.lote }}</td>
+                    <td>{{ "{:,.3f}".format(g.peso).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        Nenhuma Gta Cadastrada nesse registro.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% block script %}
+<script src="https://unpkg.com/imask"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const pesoInput = document.getElementById("peso");
+    const machosInput = document.getElementById("machos");
+    const femeasInput = document.getElementById("femeas");
+
+    if (pesoInput) {
+      IMask(pesoInput, {
+        mask: Number,
+        scale: 2,
+        signed: false,
+        thousandsSeparator: '.',
+        padFractionalZeros: true,
+        normalizeZeros: true,
+        radix: ',',
+        mapToRadix: ['.'],
+        min: 0,
+        max: 999999.99
+      });
+    }
+  });  
+</script>
+<script>
+  (function () {
+    const fields = ['serie','lote','peso'];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const key = 'gta:' + id;
+      const saved = localStorage.getItem(key);
+      if (saved && !el.value) el.value = saved;
+      el.addEventListener('input', () => localStorage.setItem(key, el.value));
+    });
+
+    // Opcional: limpar após submit bem-sucedido
+    // document.querySelector('form').addEventListener('submit', () => {
+    //   fields.forEach(id => localStorage.removeItem('gta:' + id));
+    // });
+  })();
+</script>
+{% endblock %}

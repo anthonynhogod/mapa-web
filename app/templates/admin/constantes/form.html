@@ -1,0 +1,109 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ cfg.singular }}{% endblock %}
+{% block content %}
+
+{% include "admin/constantes/_abas.html" %}
+
+<h2 class="titulo-form">
+  {{ 'Editar' if item else 'Novo' }} — {{ cfg.singular }}
+</h2>
+
+<form method="post"
+      action="{{ url_for('admin.constante_form', secao=secao_atual, item_id=item.id) if item
+                else url_for('admin.constante_form', secao=secao_atual) }}">
+  <div class="campo">
+    <label for="nome">
+      {{ cfg.rotulo_nome or ('Descrição exata no MAPA' if secao_atual == 'diagnosticos' else 'Nome') }}
+    </label>
+    <input type="text" id="nome" name="nome" required
+           value="{{ item[cfg.campo_nome] if item else '' }}">
+    {% if secao_atual == 'diagnosticos' %}
+    <small>Precisa ser o texto exato usado na busca do portal do MAPA.</small>
+    {% endif %}
+  </div>
+
+  {% for ex in cfg.extras or [] %}
+  <div class="campo">
+    <label for="{{ ex.campo }}">{{ ex.rotulo }}</label>
+    <input type="text" id="{{ ex.campo }}" name="{{ ex.campo }}" required
+           value="{{ item[ex.campo] if item else '' }}">
+    {% if ex.ajuda %}<small>{{ ex.ajuda }}</small>{% endif %}
+  </div>
+  {% endfor %}
+
+  {% if cfg.tem_id_mapa %}
+  <div class="campo">
+    <label for="id_mapa">{{ cfg.rotulo_id_mapa or 'ID no MAPA' }}</label>
+    <input type="number" id="id_mapa" name="id_mapa" min="1" required
+           value="{{ item.id_mapa if item else '' }}">
+    <small>{{ cfg.ajuda_id_mapa or 'Valor numérico enviado no comando incluirParte.' }}</small>
+  </div>
+  {% endif %}
+
+  <div class="campo">
+    <label for="obs">Observação</label>
+    <input type="text" id="obs" name="obs" value="{{ item.obs or '' if item else '' }}">
+  </div>
+
+  <div class="campo">
+    <label for="ativo">Status</label>
+    <select id="ativo" name="ativo">
+      <option value="1" {{ 'selected' if not item or item.ativo else '' }}>Ativo</option>
+      <option value="0" {{ 'selected' if item and not item.ativo else '' }}>Inativo</option>
+    </select>
+    <small>Inativo deixa de resolver na validação e passa a bloquear o registro.</small>
+  </div>
+
+  <button class="btn btn--primary" type="submit">Salvar</button>
+  <a class="btn btn--outline"
+     href="{{ url_for('admin.constantes_secao', secao=secao_atual) }}">Cancelar</a>
+</form>
+
+{% if item %}
+<hr style="margin:24px 0;">
+
+<h3 class="titulo-form">Apelidos aceitos nas planilhas</h3>
+<p style="opacity:.75; font-size:.9em;">
+  Cada grafia que pode aparecer nas planilhas. A comparação ignora acentos,
+  maiúsculas e pontuação — mas não adivinha nada além do que estiver aqui.
+</p>
+
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr><th>Apelido</th><th>Chave normalizada</th><th>Ações</th></tr>
+    </thead>
+    <tbody>
+      {% for a in item.aliases %}
+      <tr>
+        <td>{{ a.alias }}</td>
+        <td><code>{{ a.alias_norm }}</code></td>
+        <td class="acoes">
+          <form method="post" style="display:inline;"
+                action="{{ url_for('admin.constante_alias_excluir', secao=secao_atual, alias_id=a.id) }}">
+            <button class="btn btn--outline btn--table" type="submit">Remover</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<form method="post" class="row" style="gap:8px; margin-top:12px;"
+      action="{{ url_for('admin.constante_alias_novo', secao=secao_atual, item_id=item.id) }}">
+  <input type="text" name="alias" placeholder="Nova grafia aceita" required>
+  <button class="btn btn--outline btn--table" type="submit">Adicionar apelido</button>
+</form>
+
+<hr style="margin:24px 0;">
+
+<form method="post"
+      action="{{ url_for('admin.constante_excluir', secao=secao_atual, item_id=item.id) }}"
+      onsubmit="return confirm('Excluir definitivamente? Planilhas que usarem este termo passarão a bloquear a validação.');">
+  <input type="hidden" name="confirm" value="yes">
+  <button class="btn btn--danger" type="submit">Excluir {{ cfg.singular|lower }}</button>
+</form>
+{% endif %}
+
+{% endblock %}

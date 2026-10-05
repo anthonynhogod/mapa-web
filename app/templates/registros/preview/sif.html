@@ -1,0 +1,97 @@
+
+{% extends "base.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Preview DIF — Registro {{ registro.id }}{% endblock %}
+{% block main %}
+<div class="painel preview-panel">
+  <h2 class="titulo-form">
+    DIF — Registro {{ registro.id }} <small class="blue">({{ source }})</small>
+  </h2>
+
+  {% set topd = resumo.por_destino[0] if resumo.por_destino else ('—', 0) %}
+  {% set topp = resumo.top_partes[0] if resumo.top_partes else ('—', 0) %}
+  <div class="mini-painel">
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ resumo.total_itens }}</span></div>
+      <div class="texto-painel">Itens</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ topd[1] }}</span></div>
+      <div class="texto-painel">Top destino: {{ topd[0] }}</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ topp[1] }}</span></div>
+      <div class="texto-painel">Top parte: {{ topp[0] }}</div>
+    </div>
+  </div>
+
+  {% set warns = meta.get('warnings', []) %}
+  {% set errs  = meta.get('errors', []) %}
+  {% set cnt   = meta.get('counts', {}) %}
+  {% if warns or errs %}
+    <div class="alert {% if errs %}alert--error{% else %}alert--warning{% endif %}">
+      <div class="alert__icon">{% if errs %}❌{% else %}⚠️{% endif %}</div>
+      <div class="alert__content">
+        <strong>{{ 'Erros' if errs else 'Avisos' }}</strong> detectados.
+        <details>
+          <summary>Ver detalhes <span class="badge-count">{{ (errs|length if errs else 0) + (warns|length if warns else 0) }}</span></summary>
+          {% if errs %}
+            <h6>Erros ({{ errs|length }})</h6>
+            <ul>{% for e in errs %}<li>[{{ e.level or 'error' }}] <code>{{ e.where or '-' }}</code> — {{ e.message or '' }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if warns %}
+            <h6>Avisos ({{ warns|length }})</h6>
+            <ul>{% for w in warns %}<li>[{{ w.level or 'warning' }}] <code>{{ w.where or '-' }}</code> — {{ w.message or '' }}</li>{% endfor %}</ul>
+          {% endif %}
+          <h6>Contagens</h6>
+          <code>
+            input={{ cnt.input_rows or 0 }},
+            filtradas={{ cnt.filtered_rows or 0 }},
+            válidas={{ cnt.valid_rows or 0 }},
+            saída={{ cnt.output_records or 0 }}
+          </code>
+        </details>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="preview-body">
+    <div class="table-scroll">
+      <table class="tabela-registros">
+        <thead>
+          <tr>
+            <th>Descrição</th>
+            <th>Parte afetada</th>
+            <th>Qtd</th>
+            <th>Lote</th>
+            <th>Emergência</th>
+            <th>Destino</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td>{{ r.get('descricao') }}</td>
+            <td>{{ r.get('parte afetada') or r.get('parte') }}</td>
+            <td>{{ r.get('quantidade') }}</td>
+            <td>{{ r.get('lote') }}</td>
+            <td>{{ r.get('emergencia') }}</td>
+            <td>{{ r.get('destino') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+    <div class="form-actions" style="justify-content:flex-start; gap:8px; margin-top:16px;">
+      <a class="btn btn--outline" href="{{ url_for('registros.incluir_dados', registro_id=registro.id) }}">← Voltar para inclusão</a>
+      <a class="btn btn--outline" href="{{ url_for('registros.preview_registro', registro_id=registro.id) }}">Ver resumo geral</a>
+    </div>
+
+    <details style="margin-top:12px;">
+      <summary>Ver JSON bruto</summary>
+      <pre>{{ records | tojson(indent=2) }}</pre>
+    </details>
+  </div>
+</div>
+{% endblock %}

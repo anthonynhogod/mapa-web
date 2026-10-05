@@ -1,0 +1,110 @@
+{% extends "layout.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="painel__title">
+  <h2 class="titulo-form">Dashboard</h2>
+</div>
+
+<!-- Cards resumo -->
+<div class="mini-painel">
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo" id="cardFZ">—</span></div>
+    <div>
+      <div class="texto-painel">Finalizados</div>
+      <span class="chip chip--success">Últimos 30 dias</span>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo" id="cardPT">—</span></div>
+    <div>
+      <div class="texto-painel">Pendentes</div>
+      <span class="chip chip--warning">Últimos 30 dias</span>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo" id="cardAT">—</span></div>
+    <div>
+      <div class="texto-painel">Em andamento</div>
+      <span class="chip chip--info">Últimos 30 dias</span>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo" id="cardER">—</span></div>
+    <div>
+      <div class="texto-painel">Erros</div>
+      <span class="chip chip--danger">Últimos 30 dias</span>
+    </div>
+  </div>
+</div>
+
+<div class="row grid-3">
+  <div class="painel" style="grid-column: span 2;">
+    <h3 style="margin:0;">Lançamentos por dia (30d)</h3>
+    <div class="chart-box">
+      <canvas id="chartDaily"></canvas>
+    </div>
+  </div>
+  <div class="painel">
+    <h3 style="margin:0;">Distribuição por status (30d)</h3>
+    <div class="chart-box">
+      <canvas id="chartStatus"></canvas>
+    </div>
+  </div>
+</div>
+{% block script %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    const colors = { AT: '#0dcaf0', PT: '#f9b234', FZ: '#1fbf75', ER: '#e14d4d' };
+    function destroyIfExists(id) { const c = Chart.getChart(id); if (c) c.destroy(); }
+    async function loadData() { const res = await fetch("{{ url_for('public.dashboard_data') }}"); if (!res.ok) throw new Error('Falha ao carregar dados'); return res.json(); }
+    function barOptions({ stacked = false, horizontal = false } = {}) { return { responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x', scales: { x: { stacked: !!stacked, ticks: { autoSkip: true, maxRotation: 0 } }, y: { stacked: !!stacked, beginAtZero: true } }, plugins: { legend: { position: 'top' }, tooltip: { mode: 'index', intersect: false } } }; }
+
+    (async function init() {
+      try {
+        const data = await loadData();
+        const updateCard = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = (val ?? 0); };
+        updateCard('cardFZ', data.status_totals.FZ); updateCard('cardPT', data.status_totals.PT); updateCard('cardAT', data.status_totals.AT); updateCard('cardER', data.status_totals.ER);
+
+        // 1) Barras empilhadas por dia
+        destroyIfExists('chartDaily');
+        new Chart(document.getElementById('chartDaily').getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: data.timeseries.labels.map(d => new Date(d).toLocaleDateString('pt-BR')),
+            datasets: [
+              { label: 'Em andamento', data: data.timeseries.AT, backgroundColor: colors.AT },
+              { label: 'Pendentes', data: data.timeseries.PT, backgroundColor: colors.PT },
+              { label: 'Finalizados', data: data.timeseries.FZ, backgroundColor: colors.FZ },
+              { label: 'Erros', data: data.timeseries.ER, backgroundColor: colors.ER }
+            ]
+          },
+          options: barOptions({ stacked: true })
+        });
+
+        // 2) Distribuição por status (horizontal)
+        destroyIfExists('chartStatus');
+        new Chart(document.getElementById('chartStatus').getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: ['Em andamento', 'Pendentes', 'Finalizados', 'Erros'],
+            datasets: [{ label: 'Total', data: [data.status_totals.AT, data.status_totals.PT, data.status_totals.FZ, data.status_totals.ER], backgroundColor: [colors.AT, colors.PT, colors.FZ, colors.ER] }]
+          },
+          options: barOptions({ horizontal: true })
+        });
+
+        // 3) Espécies
+        destroyIfExists('chartSpecies');
+        const species = data.by_species;
+        new Chart(document.getElementById('chartSpecies').getContext('2d'), {
+          type: 'bar', data: { labels: species.map(s => s.especie), datasets: [{ label: 'Registros', data: species.map(s => s.count), backgroundColor: '#4f84f3' }] }, options: barOptions({})
+        });
+      } catch (err) { console.error(err); }
+    })();
+  })();
+</script>
+{% endblock %}
+{% endblock %}

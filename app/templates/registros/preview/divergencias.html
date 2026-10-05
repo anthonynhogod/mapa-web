@@ -1,0 +1,45 @@
+
+{% extends "base.html" %}
+{% block title %}Divergência de lotes{% endblock %}
+{% block main %}
+<div class="painel">
+  <h2 class="titulo-form" style="padding:12px; border-radius:10px;">Lotes divergentes</h2>
+
+  <div class="alert alert--warning" style="margin-bottom: 12px;">
+    <div class="alert__icon">⚠️</div>
+    <div class="alert__content">
+      <strong>Foram detectadas divergências de lotes entre GTA, DIF e SIF.</strong>
+      Revise abaixo e escolha se deseja continuar mesmo assim.
+    </div>
+  </div>
+
+  <div class="dados-grid">
+    <div class="card-registro">
+      <h4 style="margin-top:0">Conjuntos</h4>
+      <ul>
+        <li>GTA: {{ lotes.gta|join(', ') if lotes.gta else '—' }}</li>
+        <li>DIF: {{ lotes.dif|join(', ') if lotes.dif else '—' }}</li>
+        <li>SIF: {{ lotes.sif|join(', ') if lotes.sif else '—' }}</li>
+      </ul>
+      <h4>Diferenças</h4>
+      <ul>
+        <li>Somente em GTA: {{ diff.only_gta|join(', ') if diff.only_gta else '—' }}</li>
+        <li>Somente em DIF: {{ diff.only_dif|join(', ') if diff.only_dif else '—' }}</li>
+        <li>Somente em SIF: {{ diff.only_sif|join(', ') if diff.only_sif else '—' }}</li>
+      </ul>
+    </div>
+    <div>
+      <h4 style="margin-top:0">Ação</h4>
+      <form method="POST" action="{{ url_for('registros.preview_registro', registro_id=registro.id) }}" class="form-completo">
+        <input type="hidden" name="gta_source" value="{{ gta_source }}">
+        <input type="hidden" name="confirm_mismatch" value="yes">
+        <p style="color:var(--muted)">Você pode <strong>permitir e continuar</strong> ou <strong>voltar</strong> para corrigir.</p>
+        <div class="form-actions">
+          <button class="btn" type="submit">Permitir e continuar</button>
+          <a class="btn btn--outline" href="{{ url_for('registros.incluir_dados', registro_id=registro.id) }}">Voltar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

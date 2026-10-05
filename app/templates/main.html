@@ -1,0 +1,59 @@
+{% extends "layout.html" %}
+{% block title %}Principal{% endblock %}
+{% block mini_painel %}
+<div class="mini-painel">
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo">{{ finalizados }}</span></div>
+    <div>
+      <div class="texto-painel">Lançamentos finalizados</div>
+      <small class="blue">Concluídos</small>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo">{{ pendentes }}</span></div>
+    <div>
+      <div class="texto-painel">Lançamentos pendentes</div>
+      <small class="blue">Aguardando ação</small>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo">{{ andamento }}</span></div>
+    <div>
+      <div class="texto-painel">Lançamentos em andamento</div>
+      <small class="blue">Processando</small>
+    </div>
+  </div>
+  <div class="mini-painel-item">
+    <div class="circulo-info"><span class="numero-circulo">{{ erros }}</span></div>
+    <div>
+      <div class="texto-painel">Erros</div>
+      <small class="blue">Atenção necessária</small>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block content %}
+{% if registros %}
+<div class="titulo-form">Últimos registros</div>
+<table class="tabela-registros">
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Espécie</th>
+            <th>Observações</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in registros %}
+        <tr>
+            <td>{{ r.periodo_label }}</td>
+            <td>{{ 'Comercialização' if r.is_comercializacao else r.especie }}</td>
+            <td>{{ r.obs or 'Sem Observações' }}</td>
+            <td>{{ r.status }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+{% endblock %}

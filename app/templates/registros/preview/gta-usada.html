@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Selecionar fonte de GTA{% endblock %}
+{% block main %}
+<div class="painel">
+  <h2 class="titulo-form" style="padding:12px; border-radius:10px;">Qual fonte de GTA usar?</h2>
+
+  <form method="POST" action="{{ url_for('registros.preview_registro', registro_id=registro.id) }}" class="form-completo">
+    <p style="color: var(--muted); margin-top: 0;">
+      Encontramos dados de GTA no <strong>upload</strong> e também no <strong>formulário</strong>.<br>
+      Escolha qual será usada no preview e na execução.
+    </p>
+
+    <div class="row grid-2">
+      <label class="form-input" style="cursor: pointer;">
+        <input type="radio" name="gta_source" value="upload" required>
+        <span class="form-label">Usar GTA do <strong>upload</strong></span>
+        <div style="color:var(--muted); font-size: .95rem;">
+          Registros: {{ meta_upload.counts.output_records if meta_upload and meta_upload.counts else 0 }}
+        </div>
+      </label>
+
+      <label class="form-input" style="cursor: pointer;">
+        <input type="radio" name="gta_source" value="manual" required>
+        <span class="form-label">Usar GTA do <strong>formulário</strong></span>
+        <div style="color:var(--muted); font-size: .95rem;">
+          Registros: {{ meta_manual.counts.output_records if meta_manual and meta_manual.counts else manual_count }}
+        </div>
+      </label>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Continuar</button>
+      <a class="btn btn--outline" href="{{ url_for('registros.incluir_dados', registro_id=registro.id) }}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

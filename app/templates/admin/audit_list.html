@@ -1,0 +1,37 @@
+{% extends "admin/layout.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Auditoria{% endblock %}
+{% block content %}
+<div class="row" style="justify-content: space-between; align-items: center;">
+  <h2 class="titulo-form" style="margin:0;">Auditoria</h2>
+
+</div>
+
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr>
+        <th>Quando</th>
+        <th>Usuário</th>
+        <th>Ação</th>
+        <th>Entidade</th>
+        <th>Detalhes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in rows %}
+      <tr>
+        <td>{{ e.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+        <td>{{ e.user.nome if e.user else '—' }}</td>
+        <td>{{ e.action }}</td>
+        <td>{{ e.entity }}#{{ e.entity_id or '' }}</td>
+        <td>
+          <pre style="white-space:pre-wrap; text-align:left;">{{ e.meta|tojson }}</pre>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+{% endblock %}

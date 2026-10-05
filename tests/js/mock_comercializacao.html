@@ -1,0 +1,267 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>mock portal comercializacao</title>
+<style>
+  .ui-dialog{position:fixed;top:10px;left:10px;display:none;background:#eee;border:1px solid #333}
+  .ui-dialog.open{display:block}
+  .ui-datatable-data tr{display:table-row}
+</style></head>
+<body>
+<!-- Simulador minimo de JSF/PrimeFaces para testar app/runner/scripts/*.js sem o portal real.
+     ?ids=legacy -> ids "j_idt..." identicos aos do legado; ?ids=random -> numeros trocados. -->
+<div id="mensagensValidacao"><div class="ui-messages"></div></div>
+<div id="outContent"></div>
+<div id="dialogs"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('ids') || 'legacy';
+const EXIGE_TRANSACOES = Q.get('exige') === '1';
+const PAGE = 10;               // linhas por pagina da tabela de transacoes
+const RPAGE = 5;               // linhas por pagina da busca de produtos
+
+const rnd = {};
+function J(legacy) {           // 'j_idt611' -> id numerico (estavel dentro da pagina)
+  if (MODE === 'legacy') return legacy;
+  if (!rnd[legacy]) rnd[legacy] = 'j_idt' + (Number(legacy.slice(5)) + 5000 + Object.keys(rnd).length * 3);
+  return rnd[legacy];
+}
+const P = { emp: J('j_idt499'), ins: J('j_idt597'), qry: J('j_idt611') };
+
+const CATALOGO = [
+  {id: 1717, nome: 'Apresuntado antigo'}, {id: 17178, nome: 'Apresuntado'}, {id: 17176, nome: 'Apresuntado fatiado'},
+  {id: 17189, nome: 'Bacon'}, {id: 17186, nome: 'Bacon fatiado'}, {id: 18152, nome: 'Linguica frescal'},
+  {id: 18321, nome: 'Miudos salgados de suino'}, {id: 18538, nome: 'Residuos de abate de suino'},
+];
+const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB','PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
+
+// ---------- "servidor" ----------
+const S = window.__server = {
+  view: 'consulta', registros: [], sel: null, atual: null, empresa: null,
+  transacoes: [], rowAtual: null, produtoSel: null, busca: [], buscaPag: 0, tPag: 0,
+  unknown: [], saved: false, msg: null, ufSel: null, qtd: null,
+};
+let pending = 0;
+let widgetOpen = {};
+
+function setMsg(sev, txt) {
+  const box = document.querySelector('#mensagensValidacao .ui-messages');
+  box.innerHTML = txt ? `<div class="ui-messages-${sev}"><ul><li><span class="ui-messages-${sev}-summary">${txt}</span></li></ul></div>` : '';
+}
+
+// ---------- DOM ----------
+function el(html) { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; }
+function render() {
+  const out = document.getElementById('outContent');
+  if (S.view === 'consulta') {
+    const F = 'formConsultarMapaComercializacao';
+    const rows = S.registros.filter(r => r.match).map((r, i) =>
+      `<tr data-ri="${i}" data-rk="[id=${r.id}&excluido=${r.excluido ? 'S' : 'N'}]"><td><div class="ui-radiobutton-box" onclick="S_sel(${r.id})"></div></td><td>${r.ini} a ${r.fim}</td></tr>`).join('');
+    const vazio = S.consultou && !S.registros.some(r => r.match) ? '<tr><td colspan="3">Nenhum registro encontrado.</td></tr>' : '';
+    out.innerHTML = `<form id="${F}">
+      <input id="${F}:periodoComercializacao:periodoComercializacao_startDate_input">
+      <input id="${F}:periodoComercializacao:periodoComercializacao_endDate_input">
+      <button type="button" id="${F}:${J('j_idt83')}:mapaComercializacao:commandQuery_mapaComercializacao">consultar</button>
+      <button type="button" id="${F}:${J('j_idt83')}:${J('j_idt85')}:commandPrepareInsert_${J('j_idt85')}">novo</button>
+      <button type="button" id="${F}:${J('j_idt113')}:${J('j_idt115')}:commandPrepareUpdate_${J('j_idt115')}">alterar</button>
+      <table><tbody id="${F}:${J('j_idt95')}:datatable_${J('j_idt95')}_data" class="ui-datatable-data">${rows}${vazio}</tbody></table></form>`;
+    const f = out.querySelector('form');
+    if (S.keep) { f.querySelector('[id$="startDate_input"]').value = S.keep[0]; f.querySelector('[id$="endDate_input"]').value = S.keep[1]; }
+  } else if (S.view === 'incluir') {
+    const F = 'formIncluirMapaComercializacao';
+    out.innerHTML = `<form id="${F}">
+      <input id="${F}:periodoComercializacao:periodoComercializacao_startDate_input">
+      <input id="${F}:periodoComercializacao:periodoComercializacao_endDate_input">
+      <button type="button" id="${F}:numeroRegistro:commandSearch_numeroRegistro">empresa</button>
+      <span>empresa: ${S.empresa || '-'}</span>
+      ${tabelaTransacoes(F)}
+      <button type="button" id="${F}:${J('j_idt288')}:${J('j_idt289')}:commandInsert_${J('j_idt289')}">inserir</button></form>`;
+  } else {
+    const F = 'formAlterarMapaComercializacao';
+    out.innerHTML = `<form id="${F}">
+      ${tabelaTransacoes(F)}
+      <button type="button" id="${F}:${J('j_idt359')}:${J('j_idt360')}:commandUpdate_${J('j_idt360')}">salvar</button></form>`;
+  }
+}
+function tabelaTransacoes(F) {
+  const total = S.transacoes.length, pages = Math.max(1, Math.ceil(total / PAGE));
+  const ini = S.tPag * PAGE;
+  const rows = S.transacoes.slice(ini, ini + PAGE).map((t, k) => {
+    const i = ini + k;
+    return `<tr data-ri="${i}"><td>Venda</td><td>${t.uf}</td><td>${t.produtos.length} prod.</td>
+      <td><button type="button" id="${F}:dtbTransacoes:${i}:commandEventIncluirProduto">produtos</button></td></tr>`;
+  }).join('');
+  const dis = (c) => c ? ' ui-state-disabled' : '';
+  return `<div class="ui-datatable" id="${F}:dtbTransacoes:datatable_dtbTransacoes">
+    <button type="button" id="${F}:dtbTransacoes:transacao:commandAdd_transacao">+ estado</button>
+    <table><tbody class="ui-datatable-data">${rows}</tbody></table>
+    <div class="ui-paginator">
+      <a class="ui-paginator-first${dis(S.tPag===0)}" onclick="pagT('first')">«</a>
+      <a class="ui-paginator-next${dis(S.tPag>=pages-1)}" onclick="pagT('next')">›</a>
+      <a class="ui-paginator-last ui-state-default ui-corner-all${dis(S.tPag>=pages-1)}" onclick="pagT('last')">»</a>
+    </div></div>`;
+}
+function pagT(w) {
+  if (event.target.classList.contains('ui-state-disabled')) return;
+  const pages = Math.max(1, Math.ceil(S.transacoes.length / PAGE));
+  S.tPag = w === 'first' ? 0 : w === 'last' ? pages - 1 : S.tPag + 1;
+  setTimeout(render, 15);
+}
+function S_sel(id) { S.sel = id; }
+
+// ---------- dialogos (persistentes) ----------
+function buildDialogs() {
+  const d = document.getElementById('dialogs');
+  const ufOpts = ['<option value="">Selecione</option>'].concat(UFS.map(u => `<option value="${u}">${u}</option>`)).join('');
+  d.innerHTML = `
+  <div class="ui-dialog" id="dlgInsertTransacao"><form id="insertTransacao:frmDialog">
+    <select id="insertTransacao:frmDialog:tipoTransacao_input"><option value="">-</option><option value="V">Venda</option><option value="C">Compra</option></select>
+    <select id="insertTransacao:frmDialog:ambito_input"><option value="">-</option><option value="I">Interno</option><option value="E">Externo</option></select>
+    <select id="insertTransacao:frmDialog:tipoOperador_input"><option value="">-</option><option value="A">A</option><option value="B">B</option></select>
+    <select id="insertTransacao:frmDialog:uf_ufI:uf_ufI_input">${ufOpts}</select>
+    <div id="insertTransacao:frmDialog:msgDialog"></div>
+    <button type="button" id="insertTransacao:frmDialog:${J('j_idt577')}:${J('j_idt578')}:commandDialogAdd_${J('j_idt578')}">ok</button>
+  </form></div>
+
+  <div class="ui-dialog" id="dlgInsertProduto"><form id="${P.ins}:frmDialog">
+    <input id="${P.ins}:frmDialog:quantidade_hinput" type="hidden">
+    <div id="${P.ins}:frmDialog:msgDialog"></div>
+    <button type="button" id="${P.ins}:frmDialog:${J('j_idt608')}:${J('j_idt609')}:commandDialogAdd_${J('j_idt609')}">add</button>
+  </form></div>
+
+  <div class="ui-dialog" id="dlgQueryProduto"><form id="${P.qry}:frmDialog">
+    <input id="${P.qry}:frmDialog:produto:produto">
+    <button type="button" id="${P.qry}:frmDialog:${J('j_idt616')}:${J('j_idt617')}:commandDialogQuery_${J('j_idt617')}">buscar</button>
+    <div class="ui-datatable" id="${P.qry}:frmDialog:dtbPesquisarProdutoPadronizado:datatable_dtbPesquisarProdutoPadronizado">
+      <table><tbody id="${P.qry}:frmDialog:dtbPesquisarProdutoPadronizado:datatable_dtbPesquisarProdutoPadronizado_data" class="ui-datatable-data"></tbody></table>
+      <div class="ui-paginator">
+        <a class="ui-paginator-first ui-state-disabled" onclick="pagB('first')">«</a>
+        <a class="ui-paginator-next" onclick="pagB('next')">›</a>
+        <a class="ui-paginator-last" onclick="pagB('last')">»</a>
+      </div></div>
+    <div id="${P.qry}:frmDialog:msgDialog"></div>
+    <button type="button" id="${P.qry}:frmDialog:${J('j_idt637')}:${J('j_idt638')}:commandDialogBind_${J('j_idt638')}">selecionar</button>
+  </form></div>
+
+  <div class="ui-dialog" id="dlgEmpresa"><form id="${P.emp}:frmDialog">
+    <input id="${P.emp}:frmDialog:numeroRegistro:numeroRegistro">
+    <button type="button" id="${P.emp}:frmDialog:${J('j_idt506')}:${J('j_idt507')}:commandDialogQuery_${J('j_idt507')}">buscar</button>
+    <table><tbody id="${P.emp}:frmDialog:resultado" class="ui-datatable-data"></tbody></table>
+    <button type="button" id="${P.emp}:frmDialog:${J('j_idt523')}:${J('j_idt524')}:commandDialogBind_${J('j_idt524')}">selecionar</button>
+  </form></div>`;
+}
+function renderBusca() {
+  const tb = document.getElementById(`${P.qry}:frmDialog:dtbPesquisarProdutoPadronizado:datatable_dtbPesquisarProdutoPadronizado_data`);
+  const ini = S.buscaPag * RPAGE;
+  tb.innerHTML = S.busca.slice(ini, ini + RPAGE).map(p =>
+    `<tr data-rk="[id=${p.id}]"><td><div class="ui-radiobutton-box" onclick="S.produtoSel=${p.id}"></div></td><td>${p.nome}</td></tr>`).join('');
+  const pages = Math.max(1, Math.ceil(S.busca.length / RPAGE));
+  const dlg = document.getElementById('dlgQueryProduto');
+  dlg.querySelector('.ui-paginator-first').classList.toggle('ui-state-disabled', S.buscaPag === 0);
+  dlg.querySelector('.ui-paginator-next').classList.toggle('ui-state-disabled', S.buscaPag >= pages - 1);
+  dlg.querySelector('.ui-paginator-last').classList.toggle('ui-state-disabled', S.buscaPag >= pages - 1);
+}
+function pagB(w) {
+  if (event.target.classList.contains('ui-state-disabled')) return;
+  const pages = Math.max(1, Math.ceil(S.busca.length / RPAGE));
+  S.buscaPag = w === 'first' ? 0 : w === 'last' ? pages - 1 : S.buscaPag + 1;
+  setTimeout(renderBusca, 15);
+}
+
+// ---------- PF stub ----------
+const DLG = { dialogInsertTransacao: 'dlgInsertTransacao', dialogInsertProdutoPadronizado: 'dlgInsertProduto',
+  dialogQueryProdutoPadronizado: 'dlgQueryProduto', dialogPesquisarRegistroMapaComercializacao: 'dlgEmpresa' };
+window.PF = function (w) {
+  const id = DLG[w]; if (!id) throw new Error('widget desconhecido ' + w);
+  const e = () => document.getElementById(id);
+  return { show() { e().classList.add('open'); }, hide() { e().classList.remove('open'); },
+           jq: { is() { return e().classList.contains('open'); }, find() { return []; } } };
+};
+window.resizeDialog = function () {}; window.resizeDialogQuery = function () {};
+window.PrimeFaces = { ajax: { Queue: { isEmpty: () => pending === 0 } }, widget: {},
+  ab(cfg) {
+    pending++;
+    setTimeout(() => {
+      try { handle(cfg); } catch (e) { S.unknown.push('EXC ' + e.message); }
+      pending--;
+      render_keep();
+      if (cfg.onco) cfg.onco();
+    }, 8);
+  } };
+function render_keep() {
+  // preserva datas digitadas na consulta entre re-renders
+  const F = 'formConsultarMapaComercializacao';
+  const a = document.getElementById(`${F}:periodoComercializacao:periodoComercializacao_startDate_input`);
+  if (a) S.keep = [a.value, document.getElementById(`${F}:periodoComercializacao:periodoComercializacao_endDate_input`).value];
+  render();
+  if (S.keep && S.view === 'consulta') {
+    document.getElementById(`${F}:periodoComercializacao:periodoComercializacao_startDate_input`).value = S.keep[0];
+    document.getElementById(`${F}:periodoComercializacao:periodoComercializacao_endDate_input`).value = S.keep[1];
+  }
+}
+const val = (id) => document.getElementById(id).value;
+
+function handle(cfg) {
+  const s = cfg.s || '';
+  const known = (re) => re.test(s);
+  if (cfg.e === 'change') return;                                 // selects (wrapper nao simulado)
+  if (!document.getElementById(s)) { S.unknown.push(s); setMsg('error', 'Fonte inexistente: ' + s); return; }
+  if (known(/commandQuery_mapaComercializacao$/)) {
+    const ini = val('formConsultarMapaComercializacao:periodoComercializacao:periodoComercializacao_startDate_input');
+    const fim = val('formConsultarMapaComercializacao:periodoComercializacao:periodoComercializacao_endDate_input');
+    S.keep = [ini, fim]; S.consultou = true; setMsg('error', '');
+    S.registros.forEach(r => r.match = r.ini === ini && r.fim === fim);
+    return;
+  }
+  if (known(/commandPrepareInsert_/)) { S.view = 'incluir'; S.empresa = null; S.transacoes = []; S.tPag = 0; return; }
+  if (known(/commandPrepareUpdate_/)) {
+    if (!S.sel) { setMsg('error', 'Selecione um registro'); return; }
+    S.atual = S.registros.find(r => r.id === S.sel); S.transacoes = S.atual.transacoes; S.tPag = 0; S.view = 'alterar'; return;
+  }
+  if (known(/commandSearch_numeroRegistro$/)) return;
+  if (known(new RegExp(P.emp + ':frmDialog:.*commandDialogQuery_'))) {
+    const n = val(`${P.emp}:frmDialog:numeroRegistro:numeroRegistro`);
+    document.getElementById(`${P.emp}:frmDialog:resultado`).innerHTML = `<tr data-rk="[id=${n}]"><td><div class="ui-radiobutton-box" onclick="S.empSel='${n}'"></div></td><td>Empresa ${n}</td></tr>`;
+    return;
+  }
+  if (known(new RegExp(P.emp + ':frmDialog:.*commandDialogBind_'))) { S.empresa = S.empSel; return; }
+  if (known(/formIncluirMapaComercializacao:.*commandInsert_/)) {
+    const ini = val('formIncluirMapaComercializacao:periodoComercializacao:periodoComercializacao_startDate_input');
+    const fim = val('formIncluirMapaComercializacao:periodoComercializacao:periodoComercializacao_endDate_input');
+    if (!S.empresa) return setMsg('error', 'Informe a empresa');
+    if (!ini || !fim) return setMsg('error', 'Informe o período');
+    if (EXIGE_TRANSACOES && !S.transacoes.length) return setMsg('error', 'Informe ao menos uma transação');
+    S.registros.push({ id: 900 + S.registros.length, ini, fim, transacoes: S.transacoes, empresa: S.empresa, match: true });
+    S.criado = true; S.view = 'consulta'; setMsg('info', 'Registro incluído com sucesso.'); return;
+  }
+  if (known(/dtbTransacoes:transacao:commandAdd_transacao$/)) return;
+  if (known(/^insertTransacao:frmDialog:.*commandDialogAdd_/)) {
+    const uf = val('insertTransacao:frmDialog:uf_ufI:uf_ufI_input');
+    if (!uf) return setMsg('error', 'UF obrigatória');
+    if (S.transacoes.some(t => t.uf === uf)) return setMsg('error', `UF ${uf} já informada`);
+    S.transacoes.push({ uf, produtos: [] });
+    S.tPag = Math.max(0, Math.ceil(S.transacoes.length / PAGE) - 1) * 0;   // portal volta p/ 1a pagina
+    document.getElementById('dlgInsertTransacao').classList.remove('open');
+    return;
+  }
+  if (known(/dtbTransacoes:\d+:commandEventIncluirProduto$/)) { S.rowAtual = Number(s.match(/dtbTransacoes:(\d+):/)[1]); S.produtoSel = null; return; }
+  if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogQuery_'))) {
+    const termo = val(`${P.qry}:frmDialog:produto:produto`).toLowerCase();
+    S.busca = CATALOGO.filter(p => p.nome.toLowerCase().includes(termo)); S.buscaPag = 0; renderBusca(); return;
+  }
+  if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogBind_'))) { S.prodBound = S.produtoSel; return; }
+  if (known(new RegExp(P.ins + ':frmDialog:.*commandDialogAdd_'))) {
+    const q = Number(val(`${P.ins}:frmDialog:quantidade_hinput`));
+    if (!S.prodBound) return setMsg('error', 'Produto obrigatório');
+    if (!(q > 0)) return setMsg('error', 'Quantidade inválida');
+    S.transacoes[S.rowAtual].produtos.push({ id: S.prodBound, qtd: q });
+    S.prodBound = null;
+    document.getElementById('dlgInsertProduto').classList.remove('open');
+    return;
+  }
+  if (known(/formAlterarMapaComercializacao:.*commandUpdate_/)) { S.saved = true; S.view = 'consulta'; return; }
+  S.unknown.push('SEM_HANDLER ' + s);
+}
+
+window.__seed = function (regs) { S.registros = regs; S.view = 'consulta'; render(); };
+buildDialogs(); render();
+</script>
+</body></html>

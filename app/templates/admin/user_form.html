@@ -1,0 +1,58 @@
+{% extends "admin/layout.html" %}
+{% block title %}{{ 'Editar' if user else 'Novo' }} Usuário{% endblock %}
+{% block content %}
+<div class="row" style="justify-content: space-between; align-items: center;">
+  <h2 class="titulo-form" style="margin:0;">{{ 'Editar usuário' if user else 'Criar novo usuário' }}</h2>
+</div>
+
+<form class="form-completo" method="post">
+  <div class="form-input">
+    <label class="form-label">Nome</label>
+    <input name="nome" type="text" value="{{ user.nome if user and user.nome != '' else '' }}" {{ 'readonly' if user and
+      user.nome !='' }}>
+  </div>
+
+  {% if not user %}
+  <div class="form-input">
+    <label class="form-label">Senha inicial</label>
+    <input name="senha" type="password" placeholder="Defina uma senha temporária">
+  </div>
+  {% else %}
+  <div class="form-input">
+    <label class="form-label">Nova senha (opcional)</label>
+    <input name="nova_senha" type="password" placeholder="Informe para redefinir">
+  </div>
+  {% endif %}
+
+  <div class="form-input">
+    <label class="form-label">Papel</label>
+    <select name="role">
+      <option value="user" {{ 'selected' if user and user.role.value=='USER' }}>Usuário</option>
+      <option value="admin" {{ 'selected' if user and user.role.value=='ADMIN' }}>Admin</option>
+    </select>
+  </div>
+
+  {% if user %}
+  <div class="form-input">
+    <label class="form-label">Status</label>
+    <select name="active">
+      <option value="1" {{ 'selected' if user.is_active }}>Ativo</option>
+      <option value="0" {{ 'selected' if not user.is_active }}>Inativo</option>
+    </select>
+  </div>
+  {% endif %}
+
+
+  <div class="form-actions">
+    {% if user %}
+    <button type="button" class="btn--danger" data-url="{{ url_for('admin.user_excluir', user_id=user.id) }}"
+      data-descricao="o usuario {{ user.nome }}" onclick="confirmarExclusao(this)">
+      Excluir
+    </button>
+    {% endif %}
+    <a class="btn btn--outline" href="{{ url_for('admin.users') }}">Cancelar e voltar</a>
+    <button type="submit" class="btn">Salvar</button>
+  </div>
+
+</form>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "admin/layout.html" %}
+{% block title %}Constantes — {{ cfg.label }}{% endblock %}
+{% block content %}
+
+{% include "admin/constantes/_abas.html" %}
+
+<div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+  <h2 class="titulo-form" style="margin:0;">{{ cfg.label }}</h2>
+  <a class="btn btn--outline btn--table"
+     href="{{ url_for('admin.constante_form', secao=secao_atual) }}">Novo</a>
+</div>
+
+<form method="get" class="row" style="gap:8px; margin-bottom:12px;">
+  <input type="text" name="q" value="{{ busca or '' }}" placeholder="Buscar por nome...">
+  <button class="btn btn--outline btn--table" type="submit">Buscar</button>
+  {% if busca %}
+  <a class="btn btn--outline btn--table"
+     href="{{ url_for('admin.constantes_secao', secao=secao_atual) }}">Limpar</a>
+  {% endif %}
+</form>
+
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>{{ cfg.rotulo_nome or ('Descrição no MAPA' if secao_atual == 'diagnosticos' else 'Nome') }}</th>
+        {% for ex in cfg.extras or [] %}<th>{{ ex.rotulo }}</th>{% endfor %}
+        {% if cfg.tem_id_mapa %}<th>{{ 'Índice' if secao_atual == 'estados-venda' else 'ID MAPA' }}</th>{% endif %}
+        <th>Apelidos aceitos</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in itens %}
+      <tr>
+        <td>{{ it.id }}</td>
+        <td>{{ it[cfg.campo_nome] }}</td>
+        {% for ex in cfg.extras or [] %}<td>{{ it[ex.campo] }}</td>{% endfor %}
+        {% if cfg.tem_id_mapa %}<td>{{ it.id_mapa }}</td>{% endif %}
+        <td>
+          {% for a in it.aliases %}<span class="chip">{{ a.alias }}</span>{% endfor %}
+        </td>
+        <td>{{ 'Ativo' if it.ativo else 'Inativo' }}</td>
+        <td class="acoes">
+          <a class="btn btn--outline btn--table"
+             href="{{ url_for('admin.constante_form', secao=secao_atual, item_id=it.id) }}">Editar</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">Nenhum registro encontrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p style="margin-top:14px; opacity:.75; font-size:.9em;">
+  Um termo de planilha só é aceito na validação se bater com o nome ou com um dos
+  apelidos cadastrados aqui. Não existe correspondência automática.
+</p>
+{% endblock %}

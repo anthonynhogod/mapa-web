@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Comercialização — Registros{% endblock %}
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="row" style="justify-content: space-between; align-items: center;">
+  <div class="titulo-form">Registros de Comercialização</div>
+  <a class="btn btn--outline" href="{{ url_for('comercializacao.novo') }}">Nova planilha</a>
+</div>
+
+{% if registros %}
+<table class="tabela-registros">
+  <thead>
+    <tr><th>Período</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
+  </thead>
+  <tbody>
+    {% for r in registros %}
+    <tr>
+      <td>{{ r.periodo_label }}</td>
+      <td>{{ r.obs or 'Sem Observações' }}</td>
+      <td>{{ STATUS_LABELS.get(r.status, r.status) }}</td>
+      <td>
+        {% if r.status == "AT" %}
+        <a href="{{ url_for('comercializacao.preview', registro_id=r.id) }}" class="btn btn--outline">Preview / Executar</a>
+        {% endif %}
+        <button type="button" class="btn" data-url="{{ url_for('registros.excluir', registro_id=r.id) }}"
+          data-descricao="a comercialização de {{ r.periodo_label }}" onclick="confirmarExclusao(this)">Excluir</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+{% else %}
+<p>Nenhum registro de comercialização. <a href="{{ url_for('comercializacao.novo') }}">Envie uma planilha</a>.</p>
+{% endif %}
+{% endblock %}

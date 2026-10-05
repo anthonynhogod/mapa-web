@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+instance/
+uploads/
+*.sqlite
+*.db
+.flaskenv
+.env
+app/runner/drivers/*.exe
+app/runner/drivers/chromedriver*
+screenshot_*.png
+logs/
+.pytest_cache/

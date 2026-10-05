@@ -1,0 +1,13 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin — Painel{% endblock %}
+{% block content %}
+<h2 class="titulo-form">Área Administrativa</h2>
+<div class="redirect row grid-2">
+  <div class="redirect-link"><a href="{{ url_for('admin.users') }}">Gerenciar usuários</a></div>
+  <div class="redirect-link"><a href="{{ url_for('admin.usuario_novo') }}">Criar novo usuário</a></div>
+  <div class="redirect-link"><a href="{{ url_for('admin.audits') }}">Auditoria do sistema</a></div>
+  <div class="redirect-link"><a href="{{ url_for('admin.threads') }}">Threads do sistema</a></div>
+  <div class="redirect-link"><a href="{{ url_for('admin.constantes') }}">Constantes (diagnósticos, partes, destinos, produtos e estados de vendas)</a></div>
+  <div class="redirect-link"><a href="{{ url_for('public.main') }}">Voltar ao painel principal</a></div>
+</div>
+{% endblock %}

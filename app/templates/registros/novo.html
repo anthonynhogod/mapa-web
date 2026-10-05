@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/novo-registro.css')}}">
+{% endblock %}
+
+{% block title %}Novo Registro{% endblock %}
+
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="titulo-form">
+        Incluir um novo Registro
+    </div>
+    <form action="{{ url_for('registros.novo')}}" method="post">
+        <div class="form-completo">
+            <!-- Título -->
+            <div class="row grid-1">
+                <div class="sub-titulo-form">Incluir dia de abate</div>
+            </div>
+
+            <!-- Campos iniciais -->
+            <div class="row grid-3">
+                <div class="form-input-multi">
+                    <label for="dia" class="form-label">Dia:</label>
+                    <input type="date" name="dia" id="dia">
+                </div>
+
+                <div class="form-input-multi">
+                    <label for="especie" class="form-label">Espécie/Animal:</label>
+                    <select name="especie" id="especie">
+                        <option value="">Selecione uma espécie</option>
+                        <option value="suino">Suíno</option>
+                        <option value="ave">Aves</option>
+                        <option value="bovinos">Bovinos</option>
+                    </select>
+                </div>
+
+                <div class="form-input-multi">
+                    <label for="obs" class="form-label">Observações:</label>
+                    <input type="text" name="obs" id="obs">
+                </div>
+            </div>
+
+            <!-- Botão validar -->
+            <div class="row">
+                <div></div>
+                <div class="form-submit">
+                    <input type="button" value="Validar dia" class="btn btn-primary btn-validar-dia" onclick="validar_dia()">
+                    <div class="msg-erro"></div>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock %}
+
+{% block script %}
+<script src="{{ url_for ('static', filename='js/novo-registro.js')}}"></script>
+
+
+{% endblock %}
