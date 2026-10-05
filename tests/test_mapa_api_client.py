@@ -110,3 +110,24 @@ def test_extrair_id():
     assert extrair_id({"id": 12}) == 12
     assert extrair_id([{"x": 1}, {"Id": "34"}]) == 34
     assert extrair_id({"mensagem": "ok"}) is None and extrair_id("ok") is None
+
+
+XML_ERRO = (
+    "<response><idTransacao>498</idTransacao><status>0</status><listaErros><erro><codigo>500</codigo>"
+    "<descricao>null for uri: http://x/pga_sigsif/servicos/especie</descricao><tipo>N</tipo></erro></listaErros>"
+    "<stackTrace>com.sun.jersey.server.impl...</stackTrace></response>"
+)
+
+
+def test_erro_em_xml_do_mapa_vira_mensagem_legivel_sem_stacktrace():
+    from app.mapa_api.client import parse_resposta_xml
+    d = parse_resposta_xml(XML_ERRO)
+    assert d["idTransacao"] == "498" and d["erros"][0]["codigo"] == "500" and "stackTrace" not in str(d)
+    assert parse_resposta_xml("nao e xml") is None and parse_resposta_xml("<outra/>") is None
+
+    c, _ = cli(Resp(500, None, XML_ERRO))
+    with pytest.raises(ApiError) as ei:
+        c.post("abate", [{"a": 1}])
+    msg = str(ei.value)
+    assert "[500] null for uri" in msg and "transação 498" in msg and "jersey" not in msg
+    assert ei.value.corpo["erros"][0]["descricao"].startswith("null for uri")

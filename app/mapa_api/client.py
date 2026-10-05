@@ -74,16 +74,50 @@ def resolver_raiz(ambiente: str, url_override: Optional[str] = None) -> str:
     return RAIZ["homologacao"]
 
 
+def parse_resposta_xml(texto: str) -> Optional[Dict[str, Any]]:
+    """
+    Erros do MAPA chegam em XML (observado em producao):
+      <response><idTransacao>498</idTransacao><status>0</status>
+        <listaErros><erro><codigo>500</codigo><descricao>...</descricao><tipo>N</tipo></erro></listaErros>
+        <stackTrace>...</stackTrace></response>
+    Devolve {"idTransacao", "status", "erros": [{codigo, descricao, tipo}]} (sem o stackTrace) ou None.
+    """
+    t = (texto or "").lstrip()
+    if not t.startswith("<"):
+        return None
+    try:
+        from xml.etree import ElementTree as ET
+        raiz = ET.fromstring(t)
+    except Exception:
+        return None
+    if raiz.tag.lower() != "response":
+        return None
+    erros = []
+    for e in raiz.iter("erro"):
+        erros.append({k: (e.findtext(k) or "").strip() for k in ("codigo", "descricao", "tipo")})
+    return {
+        "idTransacao": (raiz.findtext("idTransacao") or "").strip() or None,
+        "status": (raiz.findtext("status") or "").strip() or None,
+        "erros": erros,
+    }
+
+
 def _corpo(resp: requests.Response) -> Any:
     try:
         return resp.json()
     except ValueError:
-        return resp.text[:2000]
+        return parse_resposta_xml(resp.text) or resp.text[:2000]
 
 
 def resumir_corpo(corpo: Any, limite: int = 1500) -> str:
     """Texto curto e legivel do corpo de erro (para job.errors / tela)."""
-    if isinstance(corpo, (dict, list)):
+    if isinstance(corpo, dict) and isinstance(corpo.get("erros"), list):
+        # resposta XML de erro do MAPA: mostra so as descricoes (e o id da transacao p/ suporte)
+        partes = [f"[{e.get('codigo')}] {e.get('descricao')}" for e in corpo["erros"] if e.get("descricao")]
+        if corpo.get("idTransacao"):
+            partes.append(f"(transação {corpo['idTransacao']})")
+        txt = " ".join(partes) or json.dumps(corpo, ensure_ascii=False)
+    elif isinstance(corpo, (dict, list)):
         txt = json.dumps(corpo, ensure_ascii=False)
     else:
         txt = str(corpo or "").strip()
