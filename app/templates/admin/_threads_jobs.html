@@ -1,0 +1,45 @@
+{# Linhas da tabela de jobs (pagina /admin/threads e auto-refresh). Recebe `jobs`. #}
+{% for j in jobs %}
+<tr>
+  <td>#{{ j.id }}</td>
+  <td>
+    <strong>{{ j.modulo }}</strong>{% if j.lancamento %} <span class="muted">({{ j.lancamento }})</span>{% endif %}<br>
+    <span class="muted">{{ j.periodo }} · {{ j.usuario }}</span>
+  </td>
+  <td>
+    <span class="badge badge--{{ {'SUCESSO':'success','FALHOU':'danger','EXECUTANDO':'info','ESPERA':'warning'}.get(j.status,'neutral') }}">{{ j.status }}</span>
+    <div class="muted">{{ 'webservice' if j.backend == 'api' else 'navegador' }}</div>
+  </td>
+  <td>
+    <div class="progress" title="{{ j.pct }}%"><div class="progress__bar" style="width: {{ j.pct }}%"></div></div>
+    <span class="muted">{{ j.pct }}%</span>
+  </td>
+  <td class="muted">{{ j.inicio.strftime('%d/%m %H:%M:%S') if j.inicio else '—' }}<br>{{ j.fim.strftime('%d/%m %H:%M:%S') if j.fim else '—' }}</td>
+  <td>
+    {% if j.incerto %}<div class="badge badge--warning">resultado desconhecido: confira no portal</div>{% endif %}
+    {% if j.errors %}
+    <div class="erro-resumo">{{ j.erro or 'Falha sem mensagem (veja os detalhes)' }}</div>
+    <details><summary>{{ j.errors|length }} mensagem(ns)</summary>
+      <pre class="erro-detalhe">{% for e in j.errors %}{{ e }}
+
+{% endfor %}</pre>
+    </details>
+    {% else %}—{% endif %}
+  </td>
+  <td class="acoes">
+    {% if j.pode_retry %}
+    <form method="POST" action="{{ url_for('admin.retry_job', job_id=j.id) }}">
+      <button type="submit" class="btn btn--sm" onclick="return confirm('Re-enfileirar este job? O histórico de erros atual será limpo.')">Retry</button>
+    </form>
+    {% if j.pode_limpar %}
+    <form method="POST" action="{{ url_for('admin.retry_job', job_id=j.id) }}">
+      <input type="hidden" name="limpar" value="1">
+      <button type="submit" class="btn btn--sm btn--outline" onclick="return confirm('Limpar TODAS as transações do registro no portal e relançar do zero?')">Retry (limpando portal)</button>
+    </form>
+    {% endif %}
+    {% endif %}
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="7" class="vazio">{{ 'Nenhum job em aberto.' if filtro == 'abertos' else ('Nenhum job falho.' if filtro == 'falhos' else 'Nenhum job.') }}</td></tr>
+{% endfor %}

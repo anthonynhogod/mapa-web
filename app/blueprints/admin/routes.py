@@ -107,6 +107,83 @@ def audits():
 
 # Remova: _active_processes, ENV, subprocess, signal, os.kill, etc. Mantenha threading, time, etc.
 
+
+# ---------------------------------------------------------------------------
+# Threads: dados exibidos (pagina e atualizacao automatica usam os mesmos parciais)
+# ---------------------------------------------------------------------------
+FILTROS_JOBS = [("abertos", "Em aberto"), ("falhos", "Falhos"), ("todos", "Todos (últimos 100)")]
+
+
+def _filtro_jobs(valor):
+    return valor if valor in dict(FILTROS_JOBS) else "abertos"
+
+
+def _resumo_erro(errors):
+    """Primeira mensagem de erro, curta e legivel (a lista completa, com traceback, fica recolhida)."""
+    for e in errors or []:
+        linha = next((l.strip() for l in str(e).splitlines() if l.strip()), "")
+        if linha and not linha.startswith("Traceback"):
+            return linha if len(linha) <= 200 else linha[:200] + "…"
+    return ""
+
+
+def _jobs_view(filtro="abertos", limite=100):
+    from app.models import Registro, Usuario
+    q = ExecJob.query.order_by(ExecJob.id.desc())
+    if filtro == "abertos":
+        q = q.filter(ExecJob.status != "SUCESSO")
+    elif filtro == "falhos":
+        q = q.filter(ExecJob.status == "FALHOU")
+    jobs = q.limit(limite).all()
+    regs = {r.id: r for r in Registro.query.filter(Registro.id.in_({j.registro_id for j in jobs})).all()} if jobs else {}
+    nomes = dict(db.session.query(Usuario.id, Usuario.nome).filter(
+        Usuario.id.in_({j.owner_user_id for j in jobs}))) if jobs else {}
+    out = []
+    for j in jobs:
+        meta, reg = (j.meta or {}), regs.get(j.registro_id)
+        total = len(j.commands or [])
+        backend = meta.get("backend", "browser")
+        pct = 100 if j.status == "SUCESSO" else (int(100 * (j.progress or 0) / total) if total else 0)
+        out.append({
+            "id": j.id, "status": j.status, "pct": pct, "backend": backend,
+            "modulo": "Comercialização" if meta.get("modulo") == "comercializacao" else "Abate",
+            "lancamento": meta.get("lancamento"),
+            "registro_id": j.registro_id, "periodo": reg.periodo_label if reg else "registro removido",
+            "usuario": nomes.get(j.owner_user_id, "?"),
+            "inicio": j.started_at, "fim": j.finished_at,
+            "erro": _resumo_erro(j.errors), "errors": list(j.errors or []),
+            "incerto": bool(meta.get("incerto")),
+            "pode_retry": j.status == "FALHOU",
+            "pode_limpar": j.status == "FALHOU" and meta.get("modulo") == "comercializacao" and backend != "api",
+        })
+    return out
+
+
+def _workers_view():
+    from app.models import WorkerSession
+    return WorkerSession.query.order_by(WorkerSession.started_at.desc()).all()
+
+
+def _registros_sem_job():
+    """Registros ainda nao confirmados (status AT) por modulo: explica por que nao ha job na fila."""
+    from app.models import Registro
+    linhas = (db.session.query(Registro.tipo, db.func.count(Registro.id))
+              .filter(Registro.status == "AT", ~Registro.exec_jobs.any()).group_by(Registro.tipo).all())
+    return {("Comercialização" if t == "comercializacao" else "Abate"): n for t, n in linhas}
+
+
+@bp.route("/threads/jobs", methods=["GET"])
+@admin_required
+def threads_jobs_fragmento():
+    filtro = _filtro_jobs(request.args.get("filtro"))
+    return render_template("admin/_threads_jobs.html", jobs=_jobs_view(filtro), filtro=filtro)
+
+
+@bp.route("/threads/workers", methods=["GET"])
+@admin_required
+def threads_workers_fragmento():
+    return render_template("admin/_threads_workers.html", workers=_workers_view())
+
 @bp.route("/threads", methods=["POST", "GET"])
 @admin_required
 def threads():
@@ -121,17 +198,19 @@ def threads():
         # Inicia pool de threads
         from app.executor.queue import start_pool
         try:
-            start_pool(current_app, num_workers=int(numero), profile=perfil)
+            start_pool(current_app, num_workers=int(numero), profile=perfil,
+                       force_restart=bool(request.form.get("force_restart")))
             flash(f"Pool de {numero} threads iniciado com perfil {perfil}.", "success")
         except Exception as e:
             flash(f"Erro ao iniciar threads: {e}", "danger")
         return redirect(url_for('admin.threads'))
 
-    # GET: Lista workers ativos do DB e jobs pendentes
-    from app.models import WorkerSession
-    all_workers = WorkerSession.query.order_by(WorkerSession.started_at.desc()).all()  # Ordena por data decresc
-    rows = ExecJob.query.filter(ExecJob.status != "SUCESSO").all()
-    return render_template("admin/threads.html", active_processes=all_workers, rows=rows)
+    # GET: a pagina mostra o que a ultima atualizacao automatica mostraria (mesmos parciais)
+    filtro = _filtro_jobs(request.args.get("filtro"))
+    return render_template(
+        "admin/threads.html", filtro=filtro, jobs=_jobs_view(filtro), workers=_workers_view(),
+        sem_job=_registros_sem_job(), FILTROS=FILTROS_JOBS,
+    )
 # Remova import signal se estiver lá
 
 @bp.route("/stop-thread/<int:worker_id>", methods=["POST"])
