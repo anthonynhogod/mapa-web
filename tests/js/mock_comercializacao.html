@@ -15,6 +15,8 @@
 const Q = new URLSearchParams(location.search);
 const MODE = Q.get('ids') || 'legacy';
 const EXIGE_TRANSACOES = Q.get('exige') === '1';
+// ?dup=1 -> o formulario de INSERCAO tambem tem um campo ...:frmDialog:produto:produto (como o componente de consulta do portal real)
+const DUP = Q.get('dup') === '1';
 const PAGE = 10;               // linhas por pagina da tabela de transacoes
 const RPAGE = 5;               // linhas por pagina da busca de produtos
 
@@ -123,6 +125,7 @@ function buildDialogs() {
   </form></div>
 
   <div class="ui-dialog" id="dlgInsertProduto"><form id="${P.ins}:frmDialog">
+    ${DUP ? `<input id="${P.ins}:frmDialog:produto:produto" readonly placeholder="produto selecionado">` : ''}
     <input id="${P.ins}:frmDialog:quantidade_hinput" type="hidden">
     <div id="${P.ins}:frmDialog:msgDialog"></div>
     <button type="button" id="${P.ins}:frmDialog:${J('j_idt608')}:${J('j_idt609')}:commandDialogAdd_${J('j_idt609')}">add</button>
@@ -174,7 +177,7 @@ window.PF = function (w) {
   const id = DLG[w]; if (!id) throw new Error('widget desconhecido ' + w);
   const e = () => document.getElementById(id);
   return { show() { e().classList.add('open'); }, hide() { e().classList.remove('open'); },
-           jq: { is() { return e().classList.contains('open'); }, find() { return []; } } };
+           jq: { 0: e(), is() { return e().classList.contains('open'); }, find() { return []; } } };
 };
 window.resizeDialog = function () {}; window.resizeDialogQuery = function () {};
 window.PrimeFaces = { ajax: { Queue: { isEmpty: () => pending === 0 } }, widget: {},

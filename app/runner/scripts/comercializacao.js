@@ -48,6 +48,25 @@
   const ok = (m) => `OK: ${m}`;
   const exc = (code, e) => S.err(code, e);
   const campo = (tail, legacyId) => S.waitEl({ id: legacyId, tail }, { timeout: 10000 });
+
+  // Elemento DOM de um diálogo PrimeFaces (PF(w).jq é um jQuery no portal real).
+  function dialogoEl(widgetVar) {
+    try { const w = PF(widgetVar); return (w && w.jq && w.jq[0]) || null; } catch (_) { return null; }
+  }
+
+  // Campo DENTRO do diálogo certo. Vários diálogos têm ids com o mesmo sufixo (ex.: o formulário de inserção e o de
+  // busca têm ambos "...:frmDialog:produto:produto"); pegar o "primeiro visível pelo sufixo" digitava no campo errado.
+  // Sem acesso ao elemento do diálogo, descarta os campos do formulário `fora` (o de inserção).
+  function campoNoDialogo(widgetVar, tail, legacyId, { fora = null, timeout = 10000 } = {}) {
+    return S.waitFor(() => {
+      const dlg = dialogoEl(widgetVar);
+      let cands = S.findAll({ tail, within: dlg || undefined });
+      if (!dlg && fora) cands = cands.filter(e => S.formOf(e) !== fora);
+      const vis = cands.filter(S.visible);               // campos "hidden" (ex.: quantidade_hinput) nunca são visíveis
+      const pool = vis.length ? vis : cands;
+      return pool.find(e => e.id === legacyId) || pool[0] || null;
+    }, { timeout, label: `campo ${tail} no diálogo ${widgetVar}` });
+  }
   const botao = (form, parte, legacyId) =>
     S.srcId({ id: legacyId, css: `[id^="${esc(form)}:"][id*="${parte}"]` });
 
@@ -466,15 +485,26 @@
       await PF("dialogInsertProdutoPadronizado").show();
 
       // 2) quantidade
-      const q = await campo("frmDialog:quantidade_hinput", "j_idt597:frmDialog:quantidade_hinput");
+      const q = await campoNoDialogo("dialogInsertProdutoPadronizado", "frmDialog:quantidade_hinput", "j_idt597:frmDialog:quantidade_hinput");
       q.value = quantidade;
       const fIns = S.formOf(q);
 
       // 3) busca do produto padronizado
       await PF("dialogQueryProdutoPadronizado").show();
-      const campoProduto = await campo("frmDialog:produto:produto", "j_idt611:frmDialog:produto:produto");
+      const campoProduto = await campoNoDialogo("dialogQueryProdutoPadronizado", "frmDialog:produto:produto",
+        "j_idt611:frmDialog:produto:produto", { fora: fIns });
+      campoProduto.focus();
       campoProduto.value = descricao;
+      for (const ev of ["input", "change"]) campoProduto.dispatchEvent(new Event(ev, { bubbles: true }));
+      if (campoProduto.value !== descricao) {
+        S.closeDialogs(["dialogQueryProdutoPadronizado", "dialogInsertProdutoPadronizado"]);
+        return `Erro: [CAMPO_BUSCA_INVALIDO] não consegui preencher a busca do produto com "${descricao}" (campo ${campoProduto.id}; valor lido: "${campoProduto.value}").`;
+      }
       const fQry = S.formOf(campoProduto);
+      if (fQry === fIns) {
+        S.closeDialogs(["dialogQueryProdutoPadronizado", "dialogInsertProdutoPadronizado"]);
+        return `Erro: [CAMPO_BUSCA_INVALIDO] o campo de busca (${campoProduto.id}) é do formulário de inserção, não do de busca.`;
+      }
       await S.pf({
         s: await botao(fQry, ":commandDialogQuery_", "j_idt611:frmDialog:j_idt616:j_idt617:commandDialogQuery_j_idt617"),
         p: fQry,
@@ -488,8 +518,12 @@
 
       // 4) seleciona o produto e confirma
       if (!(await selecionarProduto(idProduto))) {
+        // diagnóstico: o que a busca realmente devolveu (ajuda a ver se o id mudou no portal ou se a busca rodou vazia)
+        const vistos = Array.from(document.querySelectorAll("tr[data-rk]"))
+          .map(l => ((l.getAttribute("data-rk") || "").match(/id=(\d+)/) || [])[1]).filter(Boolean);
         S.closeDialogs(["dialogQueryProdutoPadronizado", "dialogInsertProdutoPadronizado"]);
-        return `Erro: [PRODUTO_NAO_ENCONTRADO] id=${idProduto} ("${descricao}") não apareceu na busca do portal.`;
+        return `Erro: [PRODUTO_NAO_ENCONTRADO] id=${idProduto} ("${descricao}") não apareceu na busca do portal ` +
+          `(termo digitado: "${descricao}"; ${vistos.length} resultado(s) na página atual${vistos.length ? ": ids " + vistos.slice(0, 8).join(", ") : ""}).`;
       }
       await S.pf({
         s: await botao(fQry, ":commandDialogBind_", "j_idt611:frmDialog:j_idt637:j_idt638:commandDialogBind_j_idt638"),

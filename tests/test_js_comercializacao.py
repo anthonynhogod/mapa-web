@@ -15,8 +15,10 @@ UFS = ["AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "
 
 
 def _chrome():
-    for cand in glob.glob("/opt/pw-browsers/chromium-*/chrome-linux/chrome"):
-        return cand
+    # layouts do Playwright: chrome-linux/chrome (antigo) e chrome-linux64/chrome (novo)
+    for padrao in ("/opt/pw-browsers/chromium-*/chrome-linux64/chrome", "/opt/pw-browsers/chromium-*/chrome-linux/chrome"):
+        for cand in sorted(glob.glob(padrao)):
+            return cand
     return None
 
 
@@ -31,11 +33,11 @@ def browser():
         b.close()
 
 
-def abrir(browser, ids="legacy", exige=False, registros=None):
+def abrir(browser, ids="legacy", exige=False, registros=None, dup=False):
     page = browser.new_page()
     erros = []
     page.on("pageerror", lambda e: erros.append(str(e)))
-    page.goto(f"{MOCK}?ids={ids}&exige={'1' if exige else '0'}")
+    page.goto(f"{MOCK}?ids={ids}&exige={'1' if exige else '0'}&dup={'1' if dup else '0'}")
     page.evaluate("window.__seed(%s)" % (registros if registros is not None else "[]"))
     for nome in ("core.js", "comercializacao.js"):
         page.add_script_tag(path=os.path.join(SCRIPTS, nome))
@@ -208,4 +210,47 @@ def test_incluir_estado_usa_opcoes_do_tipo(browser):
     # rotulo inexistente nas opcoes: cai no indice configurado (3 = Expedição)
     assert rodar(page, 'incluirEstadoVenda("SC", 24, {tipo: 3, ambito: 1, operador: 2, rotulo: "Saida X"})').startswith("OK")
     assert estado(page)["registros"][0]["transacoes"][0]["tipo"] == "Expedição"
+    page.close()
+
+
+def test_busca_de_produto_digita_no_campo_do_dialogo_de_busca_e_nao_no_de_insercao(browser):
+    """No portal real o formulario de insercao TAMBEM tem um ...:frmDialog:produto:produto. Com ids trocados (sem o id
+    legado) o script pegava o primeiro campo visivel pelo sufixo -> o termo ia para o campo errado e a busca rodava vazia."""
+    page = abrir(browser, "random", registros=REG_EXISTENTE % "[]", dup=True)
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    assert rodar(page, "alterarRegistroAtivoComercializacao()").startswith("OK")
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})').startswith("OK")
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 17178, "Venda")')
+    assert r.startswith("OK"), r
+    st = estado(page)
+    assert st["unknown"] == [] and page.__erros == []
+    assert st["registros"][0]["transacoes"][0]["produtos"] == [{"id": 17178, "qtd": 5}]
+    # o termo foi parar no campo da BUSCA, e o de insercao ficou intacto
+    campos = page.evaluate("""() => Array.from(document.querySelectorAll('[id$="frmDialog:produto:produto"]'))
+                                .map(e => [e.id, e.value])""")
+    busca = [v for i, v in campos if "readonly" not in i and i.endswith("frmDialog:produto:produto") and v]
+    assert busca == ["Apresuntado"], campos
+    page.close()
+
+
+def test_busca_de_produto_funciona_mesmo_sem_acesso_ao_elemento_do_dialogo(browser):
+    """Fallback: sem PF(w).jq[0], descarta o campo do formulario de insercao (mesmo sufixo) e usa o da busca."""
+    page = abrir(browser, "random", registros=REG_EXISTENTE % "[]", dup=True)
+    page.evaluate("""() => { const orig = window.PF; window.PF = (w) => { const o = orig(w); return Object.assign({}, o, { jq: { is: o.jq.is, find: () => [] } }); }; }""")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})').startswith("OK")
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 17178, "Venda")')
+    assert r.startswith("OK"), r
+    page.close()
+
+
+def test_produto_inexistente_informa_o_termo_digitado_e_o_que_a_busca_devolveu(browser):
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})')
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 99999, "Venda")')
+    assert r.startswith("Erro: [PRODUTO_NAO_ENCONTRADO] id=99999")
+    assert 'termo digitado: "Apresuntado"' in r and "ids 1717, 17178, 17176" in r          # a busca "Apresuntado" devolveu 3
     page.close()
