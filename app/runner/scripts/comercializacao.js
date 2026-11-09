@@ -58,14 +58,26 @@
   // busca têm ambos "...:frmDialog:produto:produto"); pegar o "primeiro visível pelo sufixo" digitava no campo errado.
   // Sem acesso ao elemento do diálogo, descarta os campos do formulário `fora` (o de inserção).
   function campoNoDialogo(widgetVar, tail, legacyId, { fora = null, timeout = 10000 } = {}) {
-    return S.waitFor(() => {
-      const dlg = dialogoEl(widgetVar);
-      let cands = S.findAll({ tail, within: dlg || undefined });
-      if (!dlg && fora) cands = cands.filter(e => S.formOf(e) !== fora);
+    const escolher = (cands) => {
       const vis = cands.filter(S.visible);               // campos "hidden" (ex.: quantidade_hinput) nunca são visíveis
       const pool = vis.length ? vis : cands;
       return pool.find(e => e.id === legacyId) || pool[0] || null;
-    }, { timeout, label: `campo ${tail} no diálogo ${widgetVar}` });
+    };
+    const noForm = (e) => !fora || S.formOf(e) !== fora;
+    return S.waitFor(() => {
+      const dlg = dialogoEl(widgetVar);
+      if (dlg) {
+        const achou = escolher(S.findAll({ tail, within: dlg }));
+        if (achou) return achou;
+      }
+      // Sem o elemento do diálogo (ou ele não tem o campo: o PrimeFaces pode ter re-renderizado o diálogo e deixado o
+      // jq do widget velho): procura no documento, mas NUNCA no formulário de inserção (mesmo sufixo de id).
+      return escolher(S.findAll({ tail }).filter(noForm));
+    }, { timeout, label: `campo ${tail} no diálogo ${widgetVar}` }).catch((e) => {
+      // [TIMEOUT] é classificado como transitório pelo navegador; o resto da mensagem diz o que havia na página.
+      const todos = S.findAll({ tail }).map(x => `${x.id}(${S.visible(x) ? "visível" : "oculto"})`);
+      throw new Error(`${e.message} [diálogo ${dialogoEl(widgetVar) ? "achado" : "sem elemento"}; candidatos: ${todos.join(", ") || "nenhum"}]`);
+    });
   }
   const botao = (form, parte, legacyId) =>
     S.srcId({ id: legacyId, css: `[id^="${esc(form)}:"][id*="${parte}"]` });

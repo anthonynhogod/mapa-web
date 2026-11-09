@@ -1,12 +1,19 @@
 # app/security.py
 from functools import wraps
-from flask import abort
+from flask import abort, request
+from app.extensions import login_manager
 from flask_login import current_user
 
 def admin_required(fn):
     @wraps(fn)
     def wrapper(*args, **kwargs):
-        if not current_user.is_authenticated or not getattr(current_user, "is_admin", False):
+        if not current_user.is_authenticated:
+            # sessao perdida (expirou, cookie apagado...): nao e "sem permissao". Chamadas de polling (fetch) recebem 401
+            # para a pagina avisar; navegacao normal vai para o login.
+            if request.headers.get("X-Requested-With") == "fetch":
+                abort(401)
+            return login_manager.unauthorized()
+        if not getattr(current_user, "is_admin", False):
             abort(403)
         return fn(*args, **kwargs)
     return wrapper

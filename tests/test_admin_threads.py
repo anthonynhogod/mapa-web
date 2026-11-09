@@ -89,3 +89,17 @@ def test_card_do_driver_e_botao_de_atualizar(admin, monkeypatch):
     monkeypatch.setattr(drivers, "atualizar", lambda: {**drivers.estado(), "ok": True, "mensagem": "Chrome 153 com chromedriver 153 (teste)."})
     r = c.post("/admin/driver/verificar", follow_redirects=True)
     assert "chromedriver 153 (teste)" in r.get_data(as_text=True)
+
+
+def test_sessao_perdida_nao_e_confundida_com_falta_de_permissao(app):
+    c = app.test_client()
+    r = c.get("/admin/threads")                                   # navegacao: vai para o login
+    assert r.status_code == 302 and "/auth/login" in r.headers["Location"]
+    r = c.get("/admin/threads/jobs", headers={"X-Requested-With": "fetch"})   # polling: 401 para a pagina avisar
+    assert r.status_code == 401
+
+
+def test_pagina_de_threads_avisa_quando_a_sessao_expira(admin):
+    c, _ = admin
+    html = c.get("/admin/threads").get_data(as_text=True)
+    assert "sessaoExpirou" in html and "r.status === 401" in html and "clearInterval(timer)" in html

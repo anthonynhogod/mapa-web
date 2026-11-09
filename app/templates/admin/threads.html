@@ -76,11 +76,23 @@
 {% block script %}
 <script>
     // Atualiza as tabelas com o HTML renderizado pelo servidor (mesmos parciais da pagina).
+    let timer = null;
+    function sessaoExpirou() {
+        clearInterval(timer);                       // para de insistir (antes: um 403 a cada 10 s, sem aviso)
+        if (document.getElementById('aviso-sessao')) return;
+        const a = document.createElement('div');
+        a.id = 'aviso-sessao';
+        a.className = 'alert alert--danger';
+        a.innerHTML = '<div class="alert__icon">🔒</div><div class="alert__content"><strong>Sua sessão expirou.</strong> ' +
+            'A atualização automática parou (os jobs continuam rodando). <a href="/auth/login">Entrar novamente</a>.</div>';
+        document.querySelector('.outras-informacoes').prepend(a);
+    }
     async function recarregar(url, seletor) {
         const tbody = document.querySelector(seletor);
         if (!tbody) return;
         try {
             const r = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+            if (r.status === 401 || r.status === 403) return sessaoExpirou();
             if (r.ok) tbody.innerHTML = await r.text();
         } catch (e) { console.error('Falha ao atualizar', seletor, e); }
     }
@@ -89,6 +101,6 @@
         recarregar('/admin/threads/workers', '#workers-tbody');
         recarregar('/admin/threads/jobs?filtro=' + encodeURIComponent(filtro), '#jobs-tbody');
     }
-    setInterval(atualizar, 10000);
+    timer = setInterval(atualizar, 10000);
 </script>
 {% endblock %}

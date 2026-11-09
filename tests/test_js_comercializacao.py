@@ -254,3 +254,29 @@ def test_produto_inexistente_informa_o_termo_digitado_e_o_que_a_busca_devolveu(b
     assert r.startswith("Erro: [PRODUTO_NAO_ENCONTRADO] id=99999")
     assert 'termo digitado: "Apresuntado"' in r and "ids 1717, 17178, 17176" in r          # a busca "Apresuntado" devolveu 3
     page.close()
+
+
+def test_busca_de_produto_com_jq_do_dialogo_velho_cai_no_documento_sem_usar_o_form_de_insercao(browser):
+    """PF(w).jq[0] pode apontar para um elemento que nao tem o campo (dialogo re-renderizado): nao pode dar timeout, nem
+    escrever no campo do formulario de insercao."""
+    page = abrir(browser, "random", registros=REG_EXISTENTE % "[]", dup=True)
+    page.evaluate("""() => { const orig = window.PF; const velho = document.createElement('div');
+        window.PF = (w) => { const o = orig(w); return Object.assign({}, o, { jq: { 0: velho, is: o.jq.is, find: () => [] } }); }; }""")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    assert rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})').startswith("OK")
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 17178, "Venda")')
+    assert r.startswith("OK"), r
+    assert estado(page)["registros"][0]["transacoes"][0]["produtos"] == [{"id": 17178, "qtd": 5}]
+    page.close()
+
+
+def test_timeout_do_campo_informa_o_que_havia_na_pagina(browser):
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    rodar(page, f'incluirEstadoVenda("RS", 23, {VENDA})')
+    page.evaluate("""document.querySelector('[id$="frmDialog:produto:produto"]').remove()""")   # o campo some: nada a achar
+    r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 17178, "Venda")')
+    assert r.startswith("Erro:") and "[TIMEOUT]" in r and "candidatos: nenhum" in r, r
+    page.close()
