@@ -144,3 +144,25 @@ def test_perfil_de_especie_nao_tem_fallback_para_suino(app):
     assert profiles.get_profile("suino").name == "suino"
     with pytest.raises(KeyError):
         profiles.get_profile("bovino")
+
+
+def test_salvar_credencial_no_modo_navegador_nao_apaga_dados_do_estabelecimento(ctx, app):
+    c, u = ctx
+    cred = _cred(u, cpf_cnpj="12345678000199", ambito="SIF", cod_uf="SC", cod_municipio_ibge="4205407")
+    html = c.get("/credenciais-mapa").get_data(as_text=True)
+    assert 'id="cod_uf"' in html and 'value="SC" selected' in html          # UF opcional visivel tambem no modo navegador
+    r = c.post("/credenciais-mapa", data={"usuario_app": "u2", "numero_sif": "0167", "especie": "suino", "cod_uf": "RS"})
+    assert r.status_code == 302
+    db.session.expire_all()
+    cred = MapaCredencial.query.one()
+    assert (cred.usuario_app, cred.cod_uf) == ("u2", "RS")
+    assert (cred.cpf_cnpj, cred.ambito, cred.cod_municipio_ibge) == ("12345678000199", "SIF", "4205407")   # preservados
+
+
+def test_preview_do_abate_mostra_de_onde_vem_a_uf(ctx):
+    from app.logic.bloqueios import uf_origem_texto
+    c, u = ctx
+    cred = _cred(u)
+    assert "RS (padrão" in uf_origem_texto(cred) and "não informa a UF" in uf_origem_texto(cred)
+    cred.cod_uf = "SC"
+    assert uf_origem_texto(cred) == "SC (da credencial)"

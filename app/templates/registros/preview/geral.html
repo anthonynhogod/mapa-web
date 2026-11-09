@@ -160,6 +160,9 @@
       </div>
     </div>
     {% endif %}
+    {% if uf_origem %}
+    <p class="muted">UF de origem das GTAs: <strong>{{ uf_origem }}</strong>. Altere em Configurações › Credenciais MAPA.</p>
+    {% endif %}
     {% if avisos_api %}
     <div class="alert alert--warning">
       <div class="alert__icon">⚠️</div>

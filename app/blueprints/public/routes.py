@@ -182,6 +182,8 @@ def credenciais_mapa():
             problemas.append("número SIF (somente dígitos)")
         if form["especie"] not in VALORES:
             problemas.append("espécie (escolha uma da lista)")
+        if not api and form["cod_uf"] and form["cod_uf"] not in UFS:
+            problemas.append("UF do estabelecimento (sigla válida ou deixe em branco)")
         if api:   # dados do estabelecimento exigidos pelo webservice (manual PGA-SIGSIF v1.3)
             if len(cpf_cnpj) not in (11, 14):
                 problemas.append("CPF/CNPJ com 11 ou 14 dígitos")
@@ -209,8 +211,15 @@ def credenciais_mapa():
                 if senha_input:  # atualiza somente se informada
                     cred.senha = senha_input
                 msg = "Credencial atualizada com sucesso."
-            cred.cpf_cnpj, cred.ambito = cpf_cnpj or None, form["ambito"] or None
-            cred.cod_uf, cred.cod_municipio_ibge = form["cod_uf"] or None, ibge or None
+            # So grava o que veio no formulario: salvar no modo navegador nao apaga o que foi preenchido no modo API
+            if "cpf_cnpj" in request.form:
+                cred.cpf_cnpj = cpf_cnpj or None
+            if "ambito" in request.form:
+                cred.ambito = form["ambito"] or None
+            if "cod_uf" in request.form:
+                cred.cod_uf = form["cod_uf"] or None
+            if "cod_municipio_ibge" in request.form:
+                cred.cod_municipio_ibge = ibge or None
             if senha_input:
                 cred.validado = False
 
@@ -230,7 +239,7 @@ def credenciais_mapa():
         "usuario_app": cred.usuario_app if cred else "", "numero_sif": cred.numero_sif if cred else "",
         "especie": cred.especie if cred else "suino",
         "cpf_cnpj": (cred.cpf_cnpj or "") if cred else "", "ambito": (cred.ambito or "SIF") if cred else "SIF",
-        "cod_uf": (cred.cod_uf or "RS") if cred else "RS", "cod_municipio_ibge": (cred.cod_municipio_ibge or "") if cred else "",
+        "cod_uf": (cred.cod_uf or ("RS" if api else "")) if cred else ("RS" if api else ""), "cod_municipio_ibge": (cred.cod_municipio_ibge or "") if cred else "",
     }
     return render(form)
 

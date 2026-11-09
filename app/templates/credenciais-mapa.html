@@ -37,6 +37,19 @@
     </div>
   </div>
 
+  {% if not usa_api %}
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cod_uf">UF do estabelecimento (opcional)</label>
+      <select id="cod_uf" name="cod_uf">
+        <option value="">— não informar (GTAs lançadas como RS) —</option>
+        {% for u in ufs %}<option value="{{ u }}" {{ 'selected' if form.cod_uf == u else '' }}>{{ u }}</option>{% endfor %}
+      </select>
+      <small class="muted">As planilhas de GTA não trazem a UF de origem; o sistema usa esta UF e mostra qual está usando no preview.</small>
+    </div>
+  </div>
+  {% endif %}
+
   {% if usa_api %}
   <h3 class="sub-titulo-form">Estabelecimento (webservice do MAPA — ambiente: {{ ambiente }})</h3>
   <div class="row grid-2">

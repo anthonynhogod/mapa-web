@@ -75,3 +75,11 @@ def uf_origem_index(cred) -> Tuple[int, Optional[str]]:
         motivo = "a credencial não informa a UF do estabelecimento"
     return UF_ORIGEM_PADRAO, (f"UF de origem das GTAs assumida como RS (índice {UF_ORIGEM_PADRAO}) porque {motivo}. "
                               "Confira antes de confirmar: GTAs de outra UF seriam lançadas como RS.")
+
+
+def uf_origem_texto(cred) -> str:
+    """Texto curto para o preview: qual UF de origem das GTAs sera usada e DE ONDE ela vem."""
+    idx, aviso = uf_origem_index(cred)
+    if aviso:
+        return f"RS (padrão — {aviso.split('porque ', 1)[-1].split('.')[0]})"
+    return f"{(cred.cod_uf or '').strip().upper()} (da credencial)"

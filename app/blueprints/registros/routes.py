@@ -21,7 +21,7 @@ from app.utils.format import normalize_str
 from markupsafe import escape
 from app.mapa_api.montagem import json_legivel, preparar_abate, usa_api
 from app.mapa_api.payloads import DadosIncompletos
-from app.logic.bloqueios import avaliar_credencial, motivos_pendencias, resumo_flash, uf_origem_index
+from app.logic.bloqueios import avaliar_credencial, motivos_pendencias, resumo_flash, uf_origem_index, uf_origem_texto
 # >>> Service sem importar nada de 'routes':
 from app.executor.service import create_job_and_finalize
 
@@ -397,6 +397,7 @@ def preview_registro(registro_id):
         modo_api=usa_api(),
         avisos_api=avisos_api,
         bloqueios=bloqueios,
+        uf_origem=None if usa_api() else uf_origem_texto(cred),
     )
 
 
