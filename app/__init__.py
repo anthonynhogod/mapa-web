@@ -47,6 +47,14 @@ def create_app():
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=True, compare_type=True, compare_server_default=True)
 
+    @app.template_filter("br")
+    def _br(valor, casas=2):
+        """1234567.5 -> '1.234.567,50' (formato brasileiro)."""
+        try:
+            return f"{float(valor):,.{casas}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (TypeError, ValueError):
+            return valor
+
     @app.template_global()
     def url_for_with(**kwargs):
         """
@@ -81,6 +89,7 @@ def create_app():
     from .blueprints.api.routes import bp as api_bp
     from .blueprints.admin.routes import bp as admin_bp
     from .blueprints.comercializacao.routes import bp as comercializacao_bp
+    from .blueprints.verificacao.routes import bp as verificacao_bp
     from .blueprints.api.auth import register_cli
 
     app.register_blueprint(public_bp)
@@ -89,6 +98,7 @@ def create_app():
     app.register_blueprint(registros_bp, url_prefix="/registros")
     app.register_blueprint(processor_bp, url_prefix="/processor")
     app.register_blueprint(comercializacao_bp, url_prefix="/comercializacao")
+    app.register_blueprint(verificacao_bp, url_prefix="/verificacao")
     app.register_blueprint(api_bp, url_prefix="/api/v1/")
 
     # CLI para emitir JWT

@@ -43,3 +43,11 @@ class UploadVendasForm(FlaskForm):
     periodo_fim = StringField("Fim do periodo (dd/mm/aaaa)", validators=[Optional()])
     obs = StringField("Observacoes", validators=[Optional()])
     submit = SubmitField("Enviar planilha")
+
+
+class VerificacaoForm(FlaskForm):
+    """Relatorio exportado do MAPA + a base de comparacao (registro ja lancado ou planilha de vendas)."""
+    mapa = FileField("Relatório do MAPA", validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")])
+    registro = SelectField("Comparar com", choices=[], validate_choice=False)      # id do registro ou "" (= planilha)
+    vendas = FileField("Planilha de vendas", validators=[Optional(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")])
+    submit = SubmitField("Conferir")

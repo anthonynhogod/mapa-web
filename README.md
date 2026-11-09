@@ -78,6 +78,21 @@ Regras de negócio adotadas:
 
 Tipos de lançamento e a API: `venda` = `tipo VENDA` + `nacional true` + `tipo_operador UF`. Os dois recebimentos já estão cadastrados **inativos** (`recebimento_autorizado` = COMPRA + `RECEBIMENTO_AUTORIZADO`; `recebimento_poa` = COMPRA + `ESTABELECIMENTO_POA`) até existir o layout de planilha de cada um.
 
+### Conferência com o relatório do MAPA (Comercialização › Verificar lançamentos)
+
+Envie o `.xlsx` exportado do MAPA (`mapaComercializacao`) e compare com o que foi enviado:
+
+- **Por célula = descrição do MAPA × UF de destino.** O MAPA já agrupa produtos de mesma descrição, então esse é o menor nível
+  comparável. Totais só por UF e só por produto **não bastam** (erros se compensam); aqui eles são *derivados* das células.
+- **Base = o que foi enviado**: o plano (produto, descrição, id, quantidade por UF) é gravado em `job.meta["plano"]` ao confirmar
+  o lançamento e no retry. Sem plano (jobs antigos) usa os comandos executados e, por último, a planilha reprocessada com o
+  De→Para de hoje (com aviso). Também dá para comparar com uma planilha de vendas avulsa.
+- **Situações:** confere · arredondamento (≤ 0,01 por item) · quantidade diferente · falta no MAPA · a mais no MAPA · nome sem
+  correspondência (descrição que só existe de um lado: nome diferente ou nunca lançado). Cada divergência traz os produtos/ids que a
+  compõem e dicas (duplicidade, item omitido).
+- Só entram linhas `Operação = UF`, sem origem de recebimento e em quilogramas; o que ficou de fora é contado e avisado. O SIF do
+  relatório é comparado com o da credencial (sem zeros à esquerda). Resultado fica salvo, com exportação `.xlsx` e selo na lista de registros.
+
 ### De → Para (Admin › Constantes)
 
 - **Produtos (vendas)**: nome na planilha → descrição usada na busca do portal + ID do produto (+ apelidos de grafia).

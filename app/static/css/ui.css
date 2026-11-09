@@ -260,3 +260,25 @@ html[data-theme="dark"] .tab-btn.active { background: var(--surface-3, #2c313a);
 /* Cabecalho de pagina com acao: a linha fica embaixo de tudo */
 .page-head { border-bottom: 2px solid var(--border-strong); padding-bottom: var(--space-3); }
 .page-head .titulo-form { border: 0; padding: 0 !important; }
+
+/* Diferenca de quantidade: negativo = MAPA a menos que o enviado */
+.num-neg { color: var(--danger); font-weight: 700; }
+.num-pos { color: var(--warning); font-weight: 700; }
+html[data-theme="dark"] .num-pos { color: #ffcc66; }
+.numero-circulo { white-space: nowrap; }
+
+/* Cabecalho de pagina: a linha e do .page-head (o titulo nao repete) -- vence os seletores html[data-theme] acima */
+html[data-theme] .page-head .titulo-form, .page-head .titulo-form { border: 0 !important; }
+.page-head .badge { vertical-align: middle; margin-left: 6px; }
+
+/* Cartoes de resumo (conferencia): numero grande sem circulo */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--space-3); margin: var(--space-3) 0 var(--space-4); }
+.kpi { padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-2); }
+.kpi--alerta { border-left: 4px solid var(--danger); }
+.kpi__label { color: var(--muted); font-size: .85rem; font-weight: 600; }
+.kpi__valor { font-size: 1.5rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+html[data-theme="dark"] .kpi__label { color: var(--text-soft, #b8bdc9); }
+
+/* Colunas de texto das tabelas de conferencia nao podem espremer */
+.tabela-registros td.obs { min-width: 260px; max-width: 420px; }
+.tabela-registros td.muted { font-size: .9rem; }

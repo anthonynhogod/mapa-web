@@ -1,0 +1,101 @@
+{% extends "layout.html" %}
+{% from "_macros/status.html" import verif_badge %}
+{% block title %}Conferência #{{ v.id }}{% endblock %}
+{% block mini_painel %}{% endblock %}
+{% macro tabela_celulas(lista) %}
+<div class="table-scroll">
+<table class="tabela-registros tabela-registros--esq">
+  <thead><tr><th>Descrição (MAPA)</th><th>UF</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Situação</th><th>Observação</th></tr></thead>
+  <tbody>
+    {% for c in lista %}
+    <tr>
+      <td><strong>{{ c.descricao }}</strong>
+        {% if c['itens'] %}<details><summary>{{ c['itens']|length }} item(ns) enviado(s)</summary>
+          <ul class="lista-motivos">{% for i in c['itens'] %}<li>{{ i.produto or ('id ' ~ i.id) }} — {{ i.quantidade|br }}{% if i.id %} <span class="muted">(id {{ i.id }})</span>{% endif %}</li>{% endfor %}</ul>
+        </details>{% endif %}</td>
+      <td>{{ c.uf }}</td>
+      <td>{{ c.nosso|br }}</td>
+      <td>{{ c.mapa|br }}</td>
+      <td class="{{ 'num-neg' if c.diff < 0 else ('num-pos' if c.diff > 0 else '') }}">{{ c.diff|br }}</td>
+      <td><span class="badge badge--{{ 'success' if c.status == 'ok' else ('info' if c.status == 'arredondamento' else 'danger') }}">{{ c.rotulo }}</span></td>
+      <td class="muted obs">{{ c.dica }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="vazio">Nada para mostrar.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+{% block content %}
+{% set t = v.resumo.totais %}
+<div class="page-head">
+  <h2 class="titulo-form">Conferência #{{ v.id }} {{ verif_badge(v.status) }}</h2>
+  <a class="btn btn--outline" href="{{ url_for('verificacao.exportar', verificacao_id=v.id) }}">Baixar .xlsx</a>
+  <a class="btn" href="{{ url_for('verificacao.lista') }}">Nova conferência</a>
+</div>
+
+<p class="muted">
+  {{ v.created_at.strftime('%d/%m/%Y %H:%M') }} ·
+  {% if registro %}registro {{ registro.periodo_label }}{% elif v.registro_id %}registro #{{ v.registro_id }}{% else %}planilha avulsa ({{ v.arquivo_base }}){% endif %} ·
+  base: {{ ORIGEM_ROTULO.get(v.origem_base, v.origem_base) }}{% if v.job_id %} (job #{{ v.job_id }}){% endif %} ·
+  relatório: {{ v.arquivo_mapa }} ({{ v.resumo.linhas_relatorio }} linhas) · {{ v.resumo.itens_enviados }} itens enviados
+</p>
+
+{% if v.status == 'OK' %}
+<div class="alert"><div class="alert__icon">✅</div><div class="alert__content"><strong>Tudo confere:</strong> as {{ t.celulas }} combinações descrição × UF batem com o relatório do MAPA.</div></div>
+{% else %}
+<div class="alert alert--danger"><div class="alert__icon">⛔</div><div class="alert__content">
+  <strong>{{ t.divergentes }} de {{ t.celulas }} combinações descrição × UF não conferem.</strong>
+  Diferença total (MAPA − enviado): <strong class="{{ 'num-neg' if t.diff < 0 else 'num-pos' }}">{{ t.diff|br }} kg</strong>.
+</div></div>
+{% endif %}
+
+{% if v.resumo.avisos %}
+<div class="alert alert--warning"><div class="alert__icon">⚠️</div><div class="alert__content"><strong>Atenção:</strong>
+  <ul class="lista-motivos">{% for a in v.resumo.avisos %}<li>{{ a }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi__label">Enviado (kg)</div><div class="kpi__valor">{{ t.nosso|br }}</div></div>
+  <div class="kpi"><div class="kpi__label">No MAPA (kg)</div><div class="kpi__valor">{{ t.mapa|br }}</div></div>
+  <div class="kpi {{ 'kpi--alerta' if t.diff != 0 else '' }}"><div class="kpi__label">Diferença (kg)</div><div class="kpi__valor {{ 'num-neg' if t.diff < 0 else ('num-pos' if t.diff > 0 else '') }}">{{ t.diff|br }}</div></div>
+  <div class="kpi {{ 'kpi--alerta' if t.divergentes else '' }}"><div class="kpi__label">Células divergentes</div><div class="kpi__valor">{{ t.divergentes }} <span class="muted">de {{ t.celulas }}</span></div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" type="button" onclick="showTab('tab-div', this)">Divergências ({{ divergentes|length }})</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-uf', this)">Por UF</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-prod', this)">Por produto</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-todas', this)">Todas as células ({{ celulas|length }})</button>
+</div>
+
+<div id="tab-div" class="tab-pane active">{{ tabela_celulas(divergentes) }}</div>
+
+<div id="tab-uf" class="tab-pane">
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>UF</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Células divergentes</th></tr></thead>
+    <tbody>{% for g in v.resultado.por_uf %}<tr><td>{{ g.uf }}</td><td>{{ g.nosso|br }}</td><td>{{ g.mapa|br }}</td>
+      <td class="{{ 'num-neg' if g.diff < 0 else ('num-pos' if g.diff > 0 else '') }}">{{ g.diff|br }}</td><td>{{ g.divergentes }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div id="tab-prod" class="tab-pane">
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>Descrição (MAPA)</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Células divergentes</th></tr></thead>
+    <tbody>{% for g in v.resultado.por_produto %}<tr><td>{{ g.descricao }}</td><td>{{ g.nosso|br }}</td><td>{{ g.mapa|br }}</td>
+      <td class="{{ 'num-neg' if g.diff < 0 else ('num-pos' if g.diff > 0 else '') }}">{{ g.diff|br }}</td><td>{{ g.divergentes }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div id="tab-todas" class="tab-pane">{{ tabela_celulas(celulas) }}</div>
+
+<script>
+  function showTab(id, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+</script>
+{% endblock %}

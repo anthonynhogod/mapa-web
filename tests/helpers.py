@@ -28,3 +28,25 @@ LINHAS_OK = [
     ("LINGUICA TOSCANA CONGELADA", "00370", "AL", 10.5),
     ("LINGUICA FRESCAL CONGELADA", "00371", "AL", 4.25),   # mesmo id do portal que a TOSCANA
 ]
+
+
+def xlsx_relatorio_mapa(linhas, *, antes=0, controle="167", extra=None):
+    """Monta um relatorio no layout exportado pelo MAPA (mapaComercializacao). `linhas`: (produto, destino, total[, overrides])."""
+    wb = Workbook()
+    ws = wb.active
+    for _ in range(antes):
+        ws.append(["linha de titulo"])
+    ws.append(["Operação", "Âmbito", "Controle", "Estabelecimento", "UF", "Município", "Grupo", "Espécie", "Produto",
+               "Unidade", "Controle Origem (Receb)", "Pessoa Origem (Receb)", "UF/Pais", "Municipio Origem (Receb)", "Total"])
+    for ln in linhas:
+        produto, destino, total = ln[:3]
+        o = {"Operação": "UF", "Unidade": "Quilograma", "Controle Origem (Receb)": "", "Pessoa Origem (Receb)": ""}
+        o.update(ln[3] if len(ln) > 3 else {})
+        ws.append([o["Operação"], "SIF", controle, "EMPRESA TESTE", "RS", "ENCANTADO", "Suídeos", "Suíno", produto,
+                   o["Unidade"], o["Controle Origem (Receb)"], o["Pessoa Origem (Receb)"], destino, "", total])
+    for e in extra or []:
+        ws.append(e)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf

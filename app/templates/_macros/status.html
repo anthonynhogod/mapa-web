@@ -3,3 +3,8 @@
 {% set m = {'AT': ('Em andamento', 'info'), 'PT': ('Pendente', 'warning'), 'FZ': ('Finalizado', 'success'), 'ER': ('Erro', 'danger')} %}
 {% set v = m.get(s, (s, 'neutral')) %}<span class="badge badge--{{ v[1] }}">{{ v[0] }}</span>
 {%- endmacro %}
+
+{# Badge do resultado de uma Verificacao (OK | DIVERGENTE). #}
+{% macro verif_badge(status) -%}
+{% if status == 'OK' %}<span class="badge badge--success">Conferido</span>{% elif status == 'DIVERGENTE' %}<span class="badge badge--danger">Divergente</span>{% else %}<span class="badge badge--neutral">—</span>{% endif %}
+{%- endmacro %}

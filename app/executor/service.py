@@ -146,6 +146,7 @@ def reconstruir_job(job: ExecJob, registro, *, limpar: bool = False) -> None:
         else:
             job.commands = com_cmds(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos(), limpar=limpar)
         meta["totais"] = totais(plano)
+        meta["plano"] = plano            # o que o retry reenvia (De->Para atual): base da conferencia
     else:
         from app.models import DifTmp, GtaTemp, GtaUploadTmp, SifTmp
 

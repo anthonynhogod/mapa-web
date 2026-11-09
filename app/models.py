@@ -650,3 +650,30 @@ class EspecieApi(_ConstMixin, db.Model):
 
     nome = db.Column(db.String(60), nullable=False, unique=True)
     id_api = db.Column(db.Integer, nullable=True)
+
+
+
+class Verificacao(db.Model):
+    """
+    Conferencia de um lancamento de comercializacao: relatorio exportado do MAPA x o que foi enviado.
+    `resultado` guarda as celulas (descricao do MAPA x UF), os totais por UF/produto e o status; ver app/logic/verificacao.py.
+    """
+    __tablename__ = "verificacao"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("usuario.id", ondelete="CASCADE"), nullable=False, index=True)
+    registro_id = db.Column(db.Integer, db.ForeignKey("registro.id", ondelete="SET NULL"), nullable=True, index=True)
+    job_id = db.Column(db.Integer, nullable=True)                       # job cujo plano serviu de base (se houver)
+    origem_base = db.Column(db.String(30), nullable=False)              # job_plano | job_comandos | planilha_reprocessada | planilha_enviada
+    arquivo_mapa = db.Column(db.String(255), nullable=False)
+    arquivo_base = db.Column(db.String(255), nullable=True)
+    status = db.Column(db.String(12), nullable=False)                   # OK | DIVERGENTE
+    resumo = db.Column(db.JSON, nullable=False)                         # totais, contagem por status, avisos, linhas ignoradas
+    resultado = db.Column(db.JSON, nullable=False)                      # celulas, por_uf, por_produto
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    registro = relationship("Registro", backref="verificacoes")
+    user = relationship("Usuario")
+
+    def __repr__(self):
+        return f"<Verificacao id={self.id} registro={self.registro_id} {self.status}>"

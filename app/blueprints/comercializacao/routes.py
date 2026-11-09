@@ -77,9 +77,16 @@ def lista():
          .filter_by(user_id=current_user.id, tipo=TIPO)
          .order_by(Registro.periodo_ini.desc(), Registro.id.desc()))
     pagination = paginate_query(q, resolve_page(default=1), db, per_page=PER_PAGE)
+    # ultima conferencia (relatorio do MAPA x enviado) de cada registro da pagina
+    from app.models import Verificacao
+    ids = [r.id for r in pagination.items]
+    conferencias = {}
+    if ids:
+        for v in Verificacao.query.filter(Verificacao.registro_id.in_(ids)).order_by(Verificacao.id.asc()).all():
+            conferencias[v.registro_id] = v          # o ultimo (maior id) sobrescreve
     return render_template(
         "comercializacao/lista.html",
-        registros=pagination.items, pagination=pagination, STATUS_LABELS=STATUS_LABELS,
+        registros=pagination.items, pagination=pagination, STATUS_LABELS=STATUS_LABELS, conferencias=conferencias,
     )
 
 
@@ -261,9 +268,9 @@ def finalizar(registro_id: int):
     coletor = ColetorPendencias()
     try:
         if usa_api():
-            preparar_comercializacao(registro, records, tipo, coletor)
+            plano_enviado = preparar_comercializacao(registro, records, tipo, coletor)["plano"]
         else:
-            build_plano(records, coletor, backend="browser")
+            plano_enviado = build_plano(records, coletor, backend="browser")
     except NotImplementedError as e:
         flash(escape(str(e)), "warning")
         return redirect(url_for("comercializacao.lista"))
@@ -278,6 +285,8 @@ def finalizar(registro_id: int):
         "periodo": {"ini": registro.periodo_ini.strftime("%d/%m/%Y"),
                     "fim": registro.periodo_fim.strftime("%d/%m/%Y")},
         "numero_sif": cred.numero_sif,
+        # o que SERA enviado (produto, descricao, id, quantidade por UF): base da conferencia com o relatorio do MAPA
+        "plano": plano_enviado,
     }
     try:
         # ultima trava: sem coletor, qualquer termo sem vinculo (ou credencial incompleta) aborta

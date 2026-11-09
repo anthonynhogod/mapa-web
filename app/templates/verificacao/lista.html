@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% from "_macros/status.html" import verif_badge %}
+{% block title %}Verificar lançamentos{% endblock %}
+{% block mini_painel %}{% endblock %}
+{% block content %}
+<h2 class="titulo-form">Verificar lançamentos de comercialização</h2>
+
+<p class="muted">
+  Envie o relatório exportado do sistema do MAPA (<em>mapaComercializacao.xlsx</em>) e compare com o que foi enviado.
+  A conferência é feita por <strong>descrição do MAPA × UF</strong>: o MAPA agrupa produtos de mesma descrição, então esse é o
+  menor nível comparável (totais só por estado ou só por produto podem esconder erros que se compensam).
+</p>
+
+<form action="{{ url_for('verificacao.nova') }}" method="post" enctype="multipart/form-data" class="form-completo">
+  {{ form.csrf_token }}
+  <div class="row grid-1">
+    <div class="form-input">
+      <label for="registro" class="form-label">Comparar o relatório com:</label>
+      {{ form.registro(id="registro") }}
+      <small class="muted">Registro já lançado: a base é exatamente o que foi enviado ao MAPA (plano gravado no job).</small>
+    </div>
+  </div>
+
+  <div class="row grid-1">
+    <div class="form-input">
+      <label for="mapa-file" class="form-label">Relatório do MAPA (.xlsx):</label>
+      <div class="file-custom" data-allowed=".xlsx" data-max="10485760">
+        {{ form.mapa(id="mapa-file", class="file-input", accept=".xlsx") }}
+        <label class="file-label btn btn--outline" for="mapa-file"><span>Selecionar</span></label>
+        <span class="file-name" id="mapa-file-name" hidden>—</span>
+        <div class="msg-erro" data-error hidden></div>
+      </div>
+      <small class="muted">Colunas lidas: Produto, UF/Pais e Total. Só entram vendas por UF (Operação = UF), em quilogramas.</small>
+    </div>
+  </div>
+
+  <div class="row grid-1">
+    <div class="form-input">
+      <label for="vendas-file" class="form-label">Planilha de vendas (só se não escolher um registro):</label>
+      <div class="file-custom" data-allowed=".xlsx" data-max="10485760">
+        {{ form.vendas(id="vendas-file", class="file-input", accept=".xlsx") }}
+        <label class="file-label btn btn--outline" for="vendas-file"><span>Selecionar</span></label>
+        <span class="file-name" id="vendas-file-name" hidden>—</span>
+        <div class="msg-erro" data-error hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">{{ form.submit(class="btn") }}</div>
+</form>
+
+<h3 class="section-title">Conferências anteriores</h3>
+<div class="table-scroll">
+<table class="tabela-registros tabela-registros--esq">
+  <thead><tr><th>Data</th><th>Registro</th><th>Base</th><th>Relatório</th><th>Resultado</th><th>Diferença (kg)</th><th>Ações</th></tr></thead>
+  <tbody>
+    {% for v in historico %}
+    <tr>
+      <td class="muted">{{ v.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+      <td>{% if v.registro_id and registros.get(v.registro_id) %}{{ registros[v.registro_id].periodo_label }}{% elif v.registro_id %}registro #{{ v.registro_id }}{% else %}<span class="muted">planilha avulsa</span>{% endif %}</td>
+      <td class="muted">{{ ORIGEM_ROTULO.get(v.origem_base, v.origem_base) }}</td>
+      <td>{{ v.arquivo_mapa }}</td>
+      <td>{{ verif_badge(v.status) }}{% if v.status != 'OK' %} <span class="muted">{{ v.resumo.totais.divergentes }} divergência(s)</span>{% endif %}</td>
+      <td class="{{ 'num-neg' if v.resumo.totais.diff < 0 else ('num-pos' if v.resumo.totais.diff > 0 else '') }}">{{ v.resumo.totais.diff|br }}</td>
+      <td class="acoes">
+        <a class="btn btn--sm btn--outline" href="{{ url_for('verificacao.ver', verificacao_id=v.id) }}">Abrir</a>
+        <form method="post" action="{{ url_for('verificacao.excluir', verificacao_id=v.id) }}">
+          {{ form.csrf_token }}
+          <button class="btn btn--sm btn--danger" type="submit" onclick="return confirm('Excluir esta conferência?')">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="vazio">Nenhuma conferência ainda.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

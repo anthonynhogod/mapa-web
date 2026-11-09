@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "_macros/pagination.html" import render_pagination_numeric %}
-{% from "_macros/status.html" import status_badge %}
+{% from "_macros/status.html" import status_badge, verif_badge %}
 {% block title %}Comercialização — Registros{% endblock %}
 {% block content %}
 {% block mini_painel %}
@@ -13,7 +13,7 @@
 {% if registros %}
 <div class="table-scroll"><table class="tabela-registros">
   <thead>
-    <tr><th>Tipo</th><th>Período</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
+    <tr><th>Tipo</th><th>Período</th><th>Observações</th><th>Status</th><th>Conferência</th><th>Ações</th></tr>
   </thead>
   <tbody>
     {% for r in registros %}
@@ -22,6 +22,7 @@
       <td>{{ r.periodo_label }}</td>
       <td>{{ r.obs or 'Sem Observações' }}</td>
       <td>{{ status_badge(r.status) }}</td>
+      <td>{% set cv = conferencias.get(r.id) %}{% if cv %}<a href="{{ url_for('verificacao.ver', verificacao_id=cv.id) }}">{{ verif_badge(cv.status) }}</a>{% elif r.status == 'FZ' %}<a class="muted" href="{{ url_for('verificacao.lista', registro=r.id) }}">Conferir</a>{% else %}<span class="muted">—</span>{% endif %}</td>
       <td class="acoes">
         {% if r.status == "AT" %}
         <a href="{{ url_for('comercializacao.preview', registro_id=r.id) }}" class="btn btn--sm btn--outline">Preview / Executar</a>
