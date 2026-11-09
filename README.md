@@ -53,6 +53,11 @@ O driver precisa ter a mesma versão principal do Chrome. Para não depender de 
   Pela linha de comando: `flask driver-check`.
 - Falha de driver/Chrome **não** é mais reportada como "credenciais inválidas": o job falha com a causa real e a
   credencial não é marcada como inválida.
+- Rede instável (proxy que bloqueia "de vez em quando", F5 resolve)? O download **repete** (Selenium Manager 3×; fallback em
+  Python 5× por arquivo), usa o **proxy configurado no Windows/variáveis HTTPS_PROXY** e, se tudo falhar, o relatório diz a causa
+  real (proxy recusou, certificado HTTPS, timeout, HTTP 403...). O fallback em Python baixa o driver do Chrome for Testing para
+  `app/runner/drivers/auto/<versão>/` e reaproveita nas próximas vezes. Alternativa manual: baixe o `chromedriver` da versão do seu
+  Chrome em https://googlechromelabs.github.io/chrome-for-testing/ e coloque em `app/runner/drivers/`.
 - Rede restrita? O download usa `googlechromelabs.github.io` e `storage.googleapis.com`. Libere esses hosts, ou defina
   `SE_PROXY`, `SE_DRIVER_MIRROR_URL`, `SE_CACHE_PATH` (variáveis do Selenium Manager; veja `selenium-manager --help`), ou
   copie um `chromedriver` compatível para `app/runner/drivers/`. `DRIVER_AUTOCHECK=0` desliga a verificação na inicialização.

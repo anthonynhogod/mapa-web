@@ -14,3 +14,4 @@ screenshot_*.png
 logs/
 .pytest_cache/
 api_catalogos/
+app/runner/drivers/auto/
