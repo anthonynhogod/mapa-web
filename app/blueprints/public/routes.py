@@ -127,82 +127,112 @@ def test():
     )
 
 
+def _erro_salvar_credencial(exc: Exception) -> str:
+    """Motivo legivel (e seguro de exibir) de uma falha ao gravar a credencial."""
+    from sqlalchemy.exc import IntegrityError
+    msg = str(exc)
+    if "FERNET_KEY" in msg or exc.__class__.__name__ in ("InvalidToken",) or (
+            isinstance(exc, ValueError) and "Fernet" in msg):
+        return ("A chave de criptografia (FERNET_KEY) não está configurada ou é inválida no servidor. "
+                "Gere uma com: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\" "
+                "e coloque em FERNET_KEY no .flaskenv.")
+    if isinstance(exc, IntegrityError):
+        return "Já existe uma credencial para este usuário. Recarregue a página e edite a existente."
+    return "Erro inesperado ao gravar (detalhes no log do servidor)."
+
+
 @bp.route("/credenciais-mapa", methods=["GET", "POST"])
 @login_required
 def credenciais_mapa():
     from flask import current_app
+    from markupsafe import escape
     from app.mapa_api.montagem import usa_api
     from app.mapa_api.payloads import UFS
+    from app.utils.especies import ESPECIES, VALORES
     cred = MapaCredencial.query.filter_by(owner_user_id=current_user.id).first()
     api = usa_api()
 
+    def render(form, status=200):
+        # valor antigo fora da lista (ex.: numero digitado quando o campo era numerico): mostra e pede correcao
+        especies = list(ESPECIES)
+        atual = (form.get("especie") or "").strip()
+        if atual and atual.lower() not in VALORES:
+            especies.append((atual, f"{atual} (valor inválido — escolha uma espécie)"))
+        return render_template(
+            "credenciais-mapa.html", cred=cred, form=form, usa_api=api, ufs=sorted(UFS), especies=especies,
+            ambiente=current_app.config.get("MAPA_API_AMBIENTE", "homologacao"),
+        ), status
+
     if request.method == "POST":
-        usuario_app = (request.form.get("usuario_app") or "").strip()
-        numero_sif  = (request.form.get("numero_sif")  or "").strip()
-        especie     = (request.form.get("especie")     or "").strip()
-        senha_input = (request.form.get("senha")       or "").strip()
-        cpf_cnpj    = "".join(ch for ch in (request.form.get("cpf_cnpj") or "") if ch.isdigit())
-        ambito      = (request.form.get("ambito") or "").strip().upper()
-        cod_uf      = (request.form.get("cod_uf") or "").strip().upper()
-        ibge        = "".join(ch for ch in (request.form.get("cod_municipio_ibge") or "") if ch.isdigit())
+        form = {k: (request.form.get(k) or "").strip() for k in
+                ("usuario_app", "numero_sif", "especie", "cpf_cnpj", "ambito", "cod_uf", "cod_municipio_ibge")}
+        senha_input = (request.form.get("senha") or "").strip()
+        form["especie"] = form["especie"].lower()
+        form["ambito"], form["cod_uf"] = form["ambito"].upper(), form["cod_uf"].upper()
+        cpf_cnpj = "".join(ch for ch in form["cpf_cnpj"] if ch.isdigit())
+        ibge = "".join(ch for ch in form["cod_municipio_ibge"] if ch.isdigit())
 
-        # Regra: senha obrigatória apenas no primeiro cadastro
-        if not all([usuario_app, numero_sif, especie]) or (cred is None and not senha_input):
-            flash("Preencha todos os campos (senha obrigatória no primeiro cadastro).", "warning")
-            return redirect(url_for(".credenciais_mapa"))
-
-        # Dados do estabelecimento exigidos pelo webservice (manual PGA-SIGSIF v1.3)
-        if api:
-            problemas = []
+        # Lista TODOS os problemas de uma vez (nada de descobrir um por tentativa)
+        problemas = []
+        if not form["usuario_app"]:
+            problemas.append("usuário do MAPA")
+        if cred is None and not senha_input:
+            problemas.append("senha (obrigatória no primeiro cadastro)")
+        if not form["numero_sif"].isdigit():
+            problemas.append("número SIF (somente dígitos)")
+        if form["especie"] not in VALORES:
+            problemas.append("espécie (escolha uma da lista)")
+        if api:   # dados do estabelecimento exigidos pelo webservice (manual PGA-SIGSIF v1.3)
             if len(cpf_cnpj) not in (11, 14):
                 problemas.append("CPF/CNPJ com 11 ou 14 dígitos")
-            if ambito not in ("SIF", "ER"):
+            if form["ambito"] not in ("SIF", "ER"):
                 problemas.append("âmbito SIF ou ER")
-            if cod_uf not in UFS:
+            if form["cod_uf"] not in UFS:
                 problemas.append("UF do estabelecimento")
             if len(ibge) != 7:
                 problemas.append("código IBGE do município com 7 dígitos")
-            if problemas:
-                flash("Informe: " + "; ".join(problemas) + ".", "warning")
-                return redirect(url_for(".credenciais_mapa"))
+        if problemas:
+            flash("Corrija: " + "; ".join(problemas) + ".", "warning")
+            return render(form, 400)
 
         try:
             if cred is None:
                 cred = MapaCredencial(
-                    owner_user_id=current_user.id,
-                    usuario_app=usuario_app,
-                    numero_sif=numero_sif,
-                    especie=especie,
+                    owner_user_id=current_user.id, usuario_app=form["usuario_app"],
+                    numero_sif=form["numero_sif"], especie=form["especie"],
                 )
                 cred.senha = senha_input  # obrigatório no primeiro cadastro
                 db.session.add(cred)
                 msg = "Credencial criada com sucesso."
             else:
-                cred.usuario_app = usuario_app
-                cred.numero_sif = numero_sif
-                cred.especie = especie
+                cred.usuario_app, cred.numero_sif, cred.especie = form["usuario_app"], form["numero_sif"], form["especie"]
                 if senha_input:  # atualiza somente se informada
                     cred.senha = senha_input
                 msg = "Credencial atualizada com sucesso."
-            cred.cpf_cnpj, cred.ambito = cpf_cnpj or None, ambito or None
-            cred.cod_uf, cred.cod_municipio_ibge = cod_uf or None, ibge or None
+            cred.cpf_cnpj, cred.ambito = cpf_cnpj or None, form["ambito"] or None
+            cred.cod_uf, cred.cod_municipio_ibge = form["cod_uf"] or None, ibge or None
             if senha_input:
                 cred.validado = False
 
             db.session.commit()
             flash(msg, "success")
-
-        except Exception:
+        except Exception as exc:
             db.session.rollback()
-            flash("Não foi possível salvar a credencial.", "danger")
+            current_app.logger.exception("Falha ao salvar MapaCredencial (user=%s)", current_user.id)
+            cred = MapaCredencial.query.filter_by(owner_user_id=current_user.id).first()
+            flash(escape(_erro_salvar_credencial(exc)), "danger")
+            return render(form, 500)
 
         return redirect(url_for(".credenciais_mapa"))
 
-    # GET: renderiza o form com dados (se houver)
-    return render_template(
-        "credenciais-mapa.html", cred=cred, usa_api=api, ufs=sorted(UFS),
-        ambiente=current_app.config.get("MAPA_API_AMBIENTE", "homologacao"),
-    )
+    # GET: valores atuais da credencial (se houver)
+    form = {
+        "usuario_app": cred.usuario_app if cred else "", "numero_sif": cred.numero_sif if cred else "",
+        "especie": cred.especie if cred else "suino",
+        "cpf_cnpj": (cred.cpf_cnpj or "") if cred else "", "ambito": (cred.ambito or "SIF") if cred else "SIF",
+        "cod_uf": (cred.cod_uf or "RS") if cred else "RS", "cod_municipio_ibge": (cred.cod_municipio_ibge or "") if cred else "",
+    }
+    return render(form)
 
 
 @bp.route("/credenciais-mapa/testar", methods=["POST"])

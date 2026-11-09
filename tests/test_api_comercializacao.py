@@ -229,7 +229,7 @@ def _rodar(app, job_id, timeout=15):
 def test_credenciais_exigem_dados_do_estabelecimento_e_testar_conexao(app, client, monkeypatch):
     _usuario()
     _login(client)
-    base = {"usuario_app": "u", "senha": "x", "numero_sif": "167", "especie": "1"}
+    base = {"usuario_app": "u", "senha": "x", "numero_sif": "167", "especie": "suino"}
     r = client.post("/credenciais-mapa", data=base)
     assert MapaCredencial.query.count() == 0                       # faltam CNPJ/ambito/UF/IBGE
     r = client.post("/credenciais-mapa", data={**base, "cpf_cnpj": "12.345.678/0001-99", "ambito": "SIF",
@@ -263,3 +263,38 @@ def test_credenciais_exigem_dados_do_estabelecimento_e_testar_conexao(app, clien
     db.session.expire_all()
     c = MapaCredencial.query.one()
     assert c.validado is False and "403" in c.last_error
+
+
+def test_credenciais_especie_e_sif_texto_e_erros_visiveis(app, client, monkeypatch):
+    _usuario()
+    _login(client)
+    app.config["EXEC_BACKEND"] = "browser"
+    # o campo era numerico e impedia digitar a especie: agora e uma lista e o SIF preserva zero a esquerda
+    html = client.get("/credenciais-mapa").get_data(as_text=True)
+    assert '<select id="especie"' in html and 'value="suino"' in html and 'name="numero_sif" type="text"' in html
+
+    ruim = {"usuario_app": "u", "senha": "x", "numero_sif": "01x", "especie": "1"}
+    r = client.post("/credenciais-mapa", data=ruim)
+    corpo = r.get_data(as_text=True)
+    assert r.status_code == 400 and MapaCredencial.query.count() == 0
+    assert "número SIF" in corpo and "espécie" in corpo          # todos os problemas de uma vez
+    assert 'value="u"' in corpo                                   # nao perde o que foi digitado
+
+    r = client.post("/credenciais-mapa", data={**ruim, "numero_sif": "0167", "especie": "suino"})
+    assert r.status_code == 302 and MapaCredencial.query.one().numero_sif == "0167"
+
+
+def test_credenciais_sem_fernet_key_mostra_a_causa(app, client):
+    _usuario()
+    _login(client)
+    app.config["EXEC_BACKEND"] = "browser"
+    app.config["FERNET_KEY"] = None
+    import os
+    antigo = os.environ.pop("FERNET_KEY", None)
+    try:
+        r = client.post("/credenciais-mapa", data={"usuario_app": "u", "senha": "x", "numero_sif": "167", "especie": "suino"})
+    finally:
+        if antigo:
+            os.environ["FERNET_KEY"] = antigo
+    assert r.status_code == 500 and "FERNET_KEY" in r.get_data(as_text=True)
+    assert MapaCredencial.query.count() == 0

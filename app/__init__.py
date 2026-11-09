@@ -37,6 +37,12 @@ def create_app():
         db_path = os.path.join(app.instance_path, "db.sqlite")
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
 
+    if not app.config.get("FERNET_KEY") and not app.config.get("TESTING"):
+        app.logger.warning(
+            "FERNET_KEY não configurada: não será possível salvar nem ler as credenciais do MAPA. "
+            "Defina no .flaskenv (veja .flaskenv.example)."
+        )
+
     # Extensões
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=True, compare_type=True, compare_server_default=True)
