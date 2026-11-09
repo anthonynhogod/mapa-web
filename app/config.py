@@ -48,6 +48,8 @@ class BaseConfig:
     # Ao subir o servidor/worker (modo navegador), confere se o chromedriver combina com o Chrome instalado
     # e baixa/atualiza se nao combinar. DRIVER_AUTOCHECK=0 desliga.
     DRIVER_AUTOCHECK = _to_bool(os.getenv("DRIVER_AUTOCHECK", "1"), True)
+    # Depois de cada lancamento de comercializacao concluido, le o registro no portal (somente leitura) e confere linha a linha.
+    AUTO_CONFERIR = _to_bool(os.getenv("AUTO_CONFERIR", "1"), True)
     # Execucao dos lancamentos: "browser" (Selenium; padrao ate haver acesso ao webservice) | "api" (webservice do MAPA)
     EXEC_BACKEND = os.getenv("EXEC_BACKEND", "browser").strip().lower()
     # Webservice PGA-SIGSIF. Padrao = HOMOLOGACAO; producao so com MAPA_API_AMBIENTE=producao.

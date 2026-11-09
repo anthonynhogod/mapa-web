@@ -38,7 +38,7 @@ const UFS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','P
 // ---------- "servidor" ----------
 const S = window.__server = {
   view: 'consulta', registros: [], sel: null, atual: null, empresa: null,
-  transacoes: [], rowAtual: null, produtoSel: null, busca: [], buscaPag: 0, tPag: 0,
+  transacoes: [], rowAtual: null, produtoSel: null, busca: [], buscaPag: 0, tPag: 0, pPag: 0,
   unknown: [], saved: false, msg: null, ufSel: null, qtd: null,
 };
 let pending = 0;
@@ -80,6 +80,7 @@ function render() {
     const F = 'formAlterarMapaComercializacao';
     out.innerHTML = `<form id="${F}">
       ${tabelaTransacoes(F)}
+      ${tabelaProdutos(F)}
       <button type="button" id="${F}:${J('j_idt359')}:${J('j_idt360')}:commandUpdate_${J('j_idt360')}">salvar</button></form>`;
   }
 }
@@ -88,7 +89,8 @@ function tabelaTransacoes(F) {
   const ini = S.tPag * PAGE;
   const rows = S.transacoes.slice(ini, ini + PAGE).map((t, k) => {
     const i = ini + k;
-    return `<tr data-ri="${i}"><td>${t.tipo || 'Venda'}</td><td>${t.uf}</td><td>${t.produtos.length} prod.</td>
+    return `<tr data-ri="${i}" data-rk="MapaComercializacaoTransacaoORM(id=${1000 + i}, pais=null, siglaUf=${t.uf}, tipoTransacao=V, ambito=N, operacao=UF)"><td>${t.tipo || 'Venda'}</td><td>${t.uf}</td><td>${t.produtos.length} prod.</td>
+      <td><span class="ui-column-title">ID Transação</span><span>${1000 + i}</span></td>
       <td><button type="button" id="${F}:dtbTransacoes:${i}:commandEventIncluirProduto">produtos</button>
       <button type="button" id="${F}:dtbTransacoes:${i}:commandEventRemove_transacao">x</button></td></tr>`;
   }).join('');
@@ -96,11 +98,43 @@ function tabelaTransacoes(F) {
   return `<div class="ui-datatable" id="${F}:dtbTransacoes:datatable_dtbTransacoes">
     <button type="button" id="${F}:dtbTransacoes:transacao:commandAdd_transacao">+ estado</button>
     <table><tbody class="ui-datatable-data">${rows}</tbody></table>
-    <div class="ui-paginator">
+    <div class="ui-paginator"><span class="ui-paginator-current">[ Página: ${S.tPag + 1}/${pages} ]</span>
       <a class="ui-paginator-first${dis(S.tPag===0)}" onclick="pagT('first')">«</a>
       <a class="ui-paginator-next${dis(S.tPag>=pages-1)}" onclick="pagT('next')">›</a>
       <a class="ui-paginator-last ui-state-default ui-corner-all${dis(S.tPag>=pages-1)}" onclick="pagT('last')">»</a>
     </div></div>`;
+}
+// Lista TODAS as linhas lancadas (uma por incluirProdutoVenda), sem agrupar, 10 por pagina, como o dtbProduto do portal.
+function linhasProdutos() {
+  const out = [];
+  S.transacoes.forEach((t, ti) => t.produtos.forEach(p => {
+    const prod = CATALOGO.find(c => c.id === p.id);
+    out.push({ tr: 1000 + ti, nome: prod ? prod.nome.toUpperCase() : 'ID ' + p.id, qtd: p.qtd });
+  }));
+  return out;
+}
+function tabelaProdutos(F) {
+  const todas = linhasProdutos(), pages = Math.max(1, Math.ceil(todas.length / PAGE));
+  const ini = S.pPag * PAGE;
+  const rows = todas.slice(ini, ini + PAGE).map((l, k) => `<tr data-ri="${ini + k}" role="row">
+      <td><span class="ui-column-title">ID Transação</span><span>${l.tr}</span></td>
+      <td><span class="ui-column-title">Tipo de transação</span>Expedição</td>
+      <td><span class="ui-column-title">Produto</span>${l.nome}</td>
+      <td><span class="ui-column-title">Unidade de medida</span>Quilograma</td>
+      <td><span class="ui-column-title">Quantidade</span>${l.qtd.toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}</td></tr>`).join('');
+  const dis = (c) => c ? ' ui-state-disabled' : '';
+  return `<div class="ui-datatable" id="${F}:dtbProduto">
+    <table><tbody class="ui-datatable-data" id="${F}:dtbProduto_data">${rows}</tbody></table>
+    <div class="ui-paginator"><span class="ui-paginator-current">[ Página: ${S.pPag + 1}/${pages} ]</span>
+      <a class="ui-paginator-first${dis(S.pPag===0)}" onclick="pagP('first')">«</a>
+      <a class="ui-paginator-next${dis(S.pPag>=pages-1)}" onclick="pagP('next')">›</a>
+      <a class="ui-paginator-last${dis(S.pPag>=pages-1)}" onclick="pagP('last')">»</a></div></div>`;
+}
+function pagP(w) {
+  if (event.target.classList.contains('ui-state-disabled')) return;
+  const pages = Math.max(1, Math.ceil(linhasProdutos().length / PAGE));
+  S.pPag = w === 'first' ? 0 : w === 'last' ? pages - 1 : S.pPag + 1;
+  setTimeout(render, 15);
 }
 function pagT(w) {
   if (event.target.classList.contains('ui-state-disabled')) return;

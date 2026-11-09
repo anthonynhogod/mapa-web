@@ -29,3 +29,6 @@ MAPA_API_DATA_ABATE=br
 # Confere/atualiza o chromedriver ao subir (modo navegador). 0 desliga.
 DRIVER_AUTOCHECK=1
 # Rede restrita (opcional, lidas pelo Selenium Manager): SE_PROXY=http://proxy:8080  SE_DRIVER_MIRROR_URL=...  SE_CACHE_PATH=...
+
+# Depois de cada lancamento de comercializacao concluido, le o portal (somente leitura) e confere linha a linha. 0 desliga.
+AUTO_CONFERIR=1

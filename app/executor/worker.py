@@ -23,6 +23,8 @@ from app.models import ExecJob, Registro, MapaCredencial, WorkerSession  # Adici
 from app.executor.credentials import ensure_valid_credential  # valida credenciais
 from app.runner import drivers
 from app.runner.drivers import NavegadorIndisponivel
+from app.executor import conferencia
+from app.runner.exceptions import FalhaNoJavascript
 from app.mapa_api.execucao import executar_job_api
 
 _ACTIVE_NAV = set()
@@ -49,6 +51,12 @@ def shutdown_all_browsers():
             pass
 
 atexit.register(shutdown_all_browsers)
+
+def _fim_registro(job, registro):
+    """data_fim do Registro so muda em lancamentos; conferencia/complemento nao a alteram."""
+    if not conferencia.tipo_job(job):
+        registro.data_fim = job.finished_at
+
 
 def _pode_repetir(nav, resultado) -> bool:
     """True so para erro que o navegador classifica como transitorio (nao ha como saber se um erro desconhecido ja gravou)."""
@@ -214,8 +222,9 @@ class Worker:
 
                     # === Atualiza status do Registro: processamento ===
                     now = dt.datetime.utcnow()
-                    registro.status = "PT"   # processamento
-                    registro.data_inicio = now
+                    if not conferencia.tipo_job(job):      # conferencia/complemento nao mexem no status do registro
+                        registro.status = "PT"   # processamento
+                        registro.data_inicio = now
                     db.session.commit()
 
                     especie = getattr(registro, "especie", None)
@@ -239,8 +248,8 @@ class Worker:
                         job.finished_at = dt.datetime.utcnow()
                         job.errors = (job.errors or []) + ["Credenciais MAPA ausentes."]
                         # Registro -> ER
-                        registro.status = "ER"
-                        registro.data_fim = job.finished_at
+                        registro.status = conferencia.status_registro(job, "ER")
+                        _fim_registro(job, registro)
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} FALHOU: credenciais ausentes")
                         continue
@@ -253,8 +262,8 @@ class Worker:
                         job.status = "SUCESSO" if ok_api else "FALHOU"
                         if not ok_api:
                             job.errors = (job.errors or []) + [msg_api]
-                        registro.status = "FZ" if ok_api else "ER"
-                        registro.data_fim = job.finished_at
+                        registro.status = conferencia.status_registro(job, "FZ" if ok_api else "ER")
+                        _fim_registro(job, registro)
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} {job.status} (api): {msg_api[:200]}")
                         continue
@@ -266,8 +275,8 @@ class Worker:
                         job.status = "FALHOU"
                         job.finished_at = dt.datetime.utcnow()
                         job.errors = (job.errors or []) + [str(e_nav)]
-                        registro.status = "ER"
-                        registro.data_fim = job.finished_at
+                        registro.status = conferencia.status_registro(job, "ER")
+                        _fim_registro(job, registro)
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} FALHOU: {e_nav}")
                         continue
@@ -275,8 +284,8 @@ class Worker:
                         job.status = "FALHOU"
                         job.finished_at = dt.datetime.utcnow()
                         job.errors = (job.errors or []) + [f"Credenciais inválidas: {err}"]
-                        registro.status = "ER"
-                        registro.data_fim = job.finished_at
+                        registro.status = conferencia.status_registro(job, "ER")
+                        _fim_registro(job, registro)
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} FALHOU: credenciais inválidas ({err})")
                         continue
@@ -303,7 +312,8 @@ class Worker:
                             )
                             _register_nav(nav)
                             sif = (job.meta or {}).get("numero_sif") or cred.numero_sif
-                            nav.login(ini_str, fim_str, cred.usuario_app, cred.senha, sif)
+                            kw_login = {"criar_se_faltar": False} if conferencia.tipo_job(job) else {}
+                            nav.login(ini_str, fim_str, cred.usuario_app, cred.senha, sif, **kw_login)
                         else:
                             # SCRIPTS_JS_PATH sobrescreve so o script do modulo (o core.js sempre vai antes)
                             nav = Navegador(
@@ -313,15 +323,23 @@ class Worker:
                             _register_nav(nav)
                             nav.login(dia_str, cred.usuario_app, cred.senha)
 
-                        for i, cmd in enumerate(job.commands or []):
+                        preparo_erro = None
+                        if conferencia.tipo_job(job) == "complemento":
+                            preparo_erro = conferencia.preparar_complemento(job, nav)
+                            total_cmds = len(job.commands or [])
+                            if preparo_erro:
+                                job.errors = (job.errors or []) + [preparo_erro]
+                            db.session.commit()
+
+                        for i, cmd in enumerate([] if preparo_erro else (job.commands or [])):
                             # Verificação adicional para parada rápida
                             if self.stop_event.is_set():
                                 print(f"[{self.name}] Parada forçada detectada durante execução. Abortando job {job.id}.")
                                 job.status = "FALHOU"
                                 job.finished_at = dt.datetime.utcnow()
                                 job.errors = (job.errors or []) + ["Execução interrompida por parada forçada."]
-                                registro.status = "ER"
-                                registro.data_fim = job.finished_at
+                                registro.status = conferencia.status_registro(job, "ER")
+                                _fim_registro(job, registro)
                                 db.session.commit()
                                 break  # Sai do loop de comandos
                             
@@ -345,8 +363,13 @@ class Worker:
                                 break
                             
                             job.progress = i + 1
+                            erro_leitura = conferencia.captura_leitura(job, cmd, last_result)
+                            if erro_leitura:
+                                job.errors = (job.errors or []) + [f"cmd[{i+1}]: {erro_leitura}"]
                             db.session.commit()
 
+                            if erro_leitura:
+                                break                     # a mensagem ja foi registrada acima
                             if isinstance(last_result, str) and (
                                 last_result.strip().lower().startswith("erro")
                             ):
@@ -357,14 +380,31 @@ class Worker:
                             # Se a UI retornou "Nenhum registro encontrado.", nav já não loga;
                             # e não consideramos erro — segue o fluxo normalmente.
 
+                        # Conferencia/complemento: a ultima leitura vira uma Verificacao
+                        if conferencia.tipo_job(job) and not job.errors:
+                            erro_conclusao = conferencia.concluir(job, registro)
+                            if erro_conclusao:
+                                job.errors = (job.errors or []) + [erro_conclusao]
+
                         # Finalização do job
                         job.status = "FALHOU" if job.errors else "SUCESSO"
                         job.finished_at = dt.datetime.utcnow()
                         # Registro -> FZ se sucesso; ER se erro
-                        registro.status = "FZ" if not job.errors else "ER"
-                        registro.data_fim = job.finished_at
+                        registro.status = conferencia.status_registro(job, "FZ" if not job.errors else "ER")
+                        _fim_registro(job, registro)
                         db.session.commit()
                         print(f"[{self.name}] job={job.id} {job.status} - errors={len(job.errors or [])}")
+
+                        # Conferencia constante: depois de um lancamento concluido, le o portal e compara linha a linha
+                        if comercializacao and job.status == "SUCESSO" and not conferencia.tipo_job(job):
+                            try:
+                                novo_id = conferencia.encadear_conferencia(job, registro, self.app.config)
+                                db.session.commit()
+                                if novo_id:
+                                    print(f"[{self.name}] conferencia automatica enfileirada: job={novo_id}")
+                            except Exception as e_conf:
+                                db.session.rollback()
+                                print(f"[{self.name}] nao foi possivel enfileirar a conferencia automatica: {e_conf!r}")
 
                     except RuntimeError as e:
                         # Sessão encerrada manualmente ou erro terminal controlado
@@ -372,8 +412,8 @@ class Worker:
                             job.status = "FALHOU"
                             job.finished_at = dt.datetime.utcnow()
                             job.errors = (job.errors or []) + ["Navegador encerrado manualmente (SESSION_CLOSED)."]
-                            registro.status = "ER"
-                            registro.data_fim = job.finished_at
+                            registro.status = conferencia.status_registro(job, "ER")
+                            _fim_registro(job, registro)
                             db.session.commit()
                             print(f"[{self.name}] job={job.id} FALHOU: navegador encerrado (SESSION_CLOSED)")
                         else:
@@ -401,6 +441,8 @@ class Worker:
                             job.finished_at = dt.datetime.utcnow()
                             if isinstance(e, NavegadorIndisponivel):
                                 job.errors = (job.errors or []) + [str(e)]
+                            elif isinstance(e, FalhaNoJavascript) and "[REGISTRO_INEXISTENTE]" in str(e):
+                                job.errors = (job.errors or []) + [str(e)]
                             elif drivers.eh_erro_de_driver(e):
                                 job.errors = (job.errors or []) + [drivers.explicar(e)]
                             else:
@@ -410,8 +452,8 @@ class Worker:
                             # Registro -> ER
                             registro = db.session.get(Registro, job.registro_id)
                             if registro:
-                                registro.status = "ER"
-                                registro.data_fim = job.finished_at
+                                registro.status = conferencia.status_registro(job, "ER")
+                                _fim_registro(job, registro)
                             db.session.commit()
                             print(f"[{self.name}] job={job.id} FALHOU (exception): {e!r}")
                             print(tb)

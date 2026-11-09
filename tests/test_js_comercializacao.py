@@ -280,3 +280,36 @@ def test_timeout_do_campo_informa_o_que_havia_na_pagina(browser):
     r = rodar(page, 'incluirProdutoVenda("RS", 0, 5, "Apresuntado", 17178, "Venda")')
     assert r.startswith("Erro:") and "[TIMEOUT]" in r and "candidatos: nenhum" in r, r
     page.close()
+
+
+def test_leitura_do_registro_traz_cada_linha_lancada_sem_agrupar_e_em_todas_as_paginas(browser):
+    """Reader somente leitura: 14 UFs (2 paginas de transacoes) x 3 produtos (42 linhas = 5 paginas), com repeticao de descricao."""
+    import json
+    page = abrir(browser, "random", registros=REG_EXISTENTE % "[]", dup=True)
+    rodar(page, f"findRegistroComercializacao('{PERIODO[0]}', '{PERIODO[1]}')")
+    rodar(page, "alterarRegistroAtivoComercializacao()")
+    esperado = []
+    for pos, uf in enumerate(UFS):
+        assert rodar(page, f'incluirEstadoVenda("{uf}", {pos + 1}, {VENDA})').startswith("OK"), uf
+        for pid, nome, q in ((17178, "Apresuntado", 100.5), (17189, "Bacon", 7.0), (17186, "Bacon fatiado", 1234567.891)):
+            assert rodar(page, f'incluirProdutoVenda("{uf}", 0, {q}, "{nome}", {pid}, "Venda")').startswith("OK")
+            esperado.append((uf, {17178: "APRESUNTADO", 17189: "BACON", 17186: "BACON FATIADO"}[pid], round(q, 2)))
+    r = rodar(page, "lerRegistroComercializacao()")
+    assert r.startswith("OK: "), r
+    dados = json.loads(r[4:])
+    assert dados["paginas"] == {"transacoes": 2, "produtos": 5} and len(dados["transacoes"]) == 14
+    uf_por_id = {t["id"]: t["uf"] for t in dados["transacoes"]}
+    assert all(t["tipo_codigo"] == "V" and t["operacao"] == "UF" for t in dados["transacoes"])
+    lidas = sorted((uf_por_id[p["transacao"]], p["produto"], round(p["quantidade"], 2)) for p in dados["produtos"])
+    assert lidas == sorted(esperado) and len(lidas) == 42
+    # nao alterou nada e deixou a tabela na 1a pagina
+    assert estado(page)["pPag"] == 0 and estado(page)["tPag"] == 0
+    assert estado(page)["unknown"] == [] and page.__erros == []
+    page.close()
+
+
+def test_leitura_sem_formulario_aberto_devolve_erro_claro(browser):
+    page = abrir(browser, "legacy", registros=REG_EXISTENTE % "[]")
+    r = rodar(page, "lerRegistroComercializacao()")
+    assert r.startswith("Erro: [SEM_FORMULARIO]"), r
+    page.close()

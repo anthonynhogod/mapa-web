@@ -49,6 +49,41 @@
   <div class="form-actions">{{ form.submit(class="btn") }}</div>
 </form>
 
+<h3 class="section-title">Conferir direto com o portal (dados reais)</h3>
+<p class="muted">
+  O worker abre o registro do período no portal e <strong>lê as linhas que estão lá</strong> (sem alterar nada, sem criar registro),
+  comparando com o que foi enviado <em>linha a linha</em>. Se faltarem linhas, dá para <strong>complementar</strong> o registro existente,
+  incluindo só o que falta, sem excluir nem relançar tudo.
+</p>
+<form action="{{ url_for('verificacao.conferir_portal') }}" method="post" class="form-completo">
+  {{ form.csrf_token }}
+  <div class="row grid-1"><div class="form-input">
+    <label for="registro-portal" class="form-label">Registro:</label>
+    <select id="registro-portal" name="registro">
+      {% for valor, rotulo in form.registro.choices if valor %}<option value="{{ valor }}" {{ 'selected' if form.registro.data == valor else '' }}>{{ rotulo }}</option>{% endfor %}
+    </select>
+  </div></div>
+  <div class="form-actions"><button class="btn" type="submit">Ler do portal e conferir</button></div>
+</form>
+
+{% if jobs_portal %}
+<div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+  <thead><tr><th>Job</th><th>Tipo</th><th>Registro</th><th>Situação</th><th>Resultado</th></tr></thead>
+  <tbody>
+  {% for j in jobs_portal %}
+    <tr>
+      <td>#{{ j.id }}</td>
+      <td>{{ 'Complemento' if j.meta.tipo_job == 'complemento' else 'Leitura do portal' }}</td>
+      <td>{% set r = registros.get(j.registro_id) %}{{ r.periodo_label if r else '#' ~ j.registro_id }}</td>
+      <td><span class="badge badge--{{ {'SUCESSO':'success','FALHOU':'danger','EXECUTANDO':'info','ESPERA':'warning'}.get(j.status,'neutral') }}">{{ j.status }}</span>
+          {% if j.errors %}<div class="erro-resumo">{{ j.errors[0][:200] }}</div>{% endif %}</td>
+      <td>{% if j.meta.verificacao_id %}<a class="btn btn--sm btn--outline" href="{{ url_for('verificacao.ver', verificacao_id=j.meta.verificacao_id) }}">Abrir</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endif %}
+
 <h3 class="section-title">Conferências anteriores</h3>
 <div class="table-scroll">
 <table class="tabela-registros tabela-registros--esq">

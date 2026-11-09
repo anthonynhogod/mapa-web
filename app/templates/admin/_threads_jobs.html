@@ -3,7 +3,7 @@
 <tr>
   <td>#{{ j.id }}</td>
   <td>
-    <strong>{{ j.modulo }}</strong>{% if j.lancamento %} <span class="muted">({{ j.lancamento }})</span>{% endif %}<br>
+    <strong>{{ j.etapa or j.modulo }}</strong>{% if j.lancamento and not j.etapa %} <span class="muted">({{ j.lancamento }})</span>{% endif %}<br>
     <span class="muted">{{ j.periodo }} · {{ j.usuario }}</span>
   </td>
   <td>

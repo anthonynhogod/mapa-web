@@ -782,10 +782,11 @@ class NavegadorComercializacao(Navegador):
     WORKER_ATTEMPTS = 1  # o executar_comando ja trata as repeticoes seguras
 
     def login(self, periodo_ini: str, periodo_fim: str, usuario: str, senha: str,
-              numero_sif: str = "167"):
+              numero_sif: str = "167", *, criar_se_faltar: bool = True):
         """
         Autentica, injeta os scripts e deixa o registro do periodo ABERTO PARA ALTERACAO
-        (cria se nao existir). Periodo no formato dd/mm/aaaa.
+        (cria se nao existir, salvo `criar_se_faltar=False`: conferencia/complemento NAO criam registro).
+        Periodo no formato dd/mm/aaaa.
         """
         self.periodo_ini, self.periodo_fim, self.numero_sif = periodo_ini, periodo_fim, str(numero_sif)
         self.data = f"{periodo_ini} a {periodo_fim}"
@@ -794,7 +795,7 @@ class NavegadorComercializacao(Navegador):
             self.injetar_scripts()
         except Exception as e:
             print(f"[NavegadorComercializacao] Aviso: falha ao injetar scripts: {e}")
-        self.verificar_criacao_registro()
+        self.verificar_criacao_registro(criar_se_faltar=criar_se_faltar)
 
     def _find(self) -> str:
         return self._js(f"findRegistroComercializacao({js_str(self.periodo_ini)}, {js_str(self.periodo_fim)})")
@@ -835,7 +836,13 @@ class NavegadorComercializacao(Navegador):
             )
         self._ensure_ok(self._js("alterarRegistroAtivoComercializacao()"), "alterarRegistroAtivoComercializacao")
 
-    def verificar_criacao_registro(self):
+    def _sem_registro(self):
+        raise FalhaNoJavascript(
+            dia=getattr(self, "data", None),
+            erro="Erro: [REGISTRO_INEXISTENTE] não há registro de comercialização neste período no portal "
+                 "(esta operação não cria registros).")
+
+    def verificar_criacao_registro(self, criar_se_faltar: bool = True):
         try:
             ok_r, err_r = self._ensure_on_abate_home(timeout=15)
             if not ok_r:
@@ -846,6 +853,8 @@ class NavegadorComercializacao(Navegador):
             msg = self._find()
             self._ensure_ok(msg, "findRegistroComercializacao")
             if msg == "Nenhum registro encontrado.":
+                if not criar_se_faltar:
+                    self._sem_registro()
                 self._create_and_select()
                 return
             try:
@@ -853,6 +862,8 @@ class NavegadorComercializacao(Navegador):
                                 "alterarRegistroAtivoComercializacao")
             except FalhaNoJavascript as e:
                 if "Nenhum registro não excluído encontrado" in str(e):
+                    if not criar_se_faltar:
+                        self._sem_registro()
                     self._create_and_select()
                 else:
                     raise

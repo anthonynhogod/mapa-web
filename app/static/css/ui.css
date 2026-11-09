@@ -282,3 +282,6 @@ html[data-theme="dark"] .kpi__label { color: var(--text-soft, #b8bdc9); }
 /* Colunas de texto das tabelas de conferencia nao podem espremer */
 .tabela-registros td.obs { min-width: 260px; max-width: 420px; }
 .tabela-registros td.muted { font-size: .9rem; }
+
+/* respiro entre um formulario e a tabela logo abaixo */
+.form-completo + .table-scroll, .form-completo + .alert { margin-top: var(--space-4); }

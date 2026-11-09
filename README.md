@@ -93,6 +93,24 @@ Envie o `.xlsx` exportado do MAPA (`mapaComercializacao`) e compare com o que fo
 - Só entram linhas `Operação = UF`, sem origem de recebimento e em quilogramas; o que ficou de fora é contado e avisado. O SIF do
   relatório é comparado com o da credencial (sem zeros à esquerda). Resultado fica salvo, com exportação `.xlsx` e selo na lista de registros.
 
+#### Conferir direto no portal, complementar e conferência automática
+
+O relatório exportado agrupa por descrição; a tela de alteração do portal **não**: a tabela de produtos (`dtbProduto`) lista cada
+linha lançada. O sistema lê essa tabela e compara **linha a linha** com o plano enviado.
+
+- **Ler do portal e conferir** (Verificar lançamentos): um job do worker abre o registro do período, lê as transações e todas as
+  páginas de produtos (`lerRegistroComercializacao()` em `comercializacao.js`) e mostra *faltam* / *quantidade diferente* / *sobram*.
+  É **somente leitura**: não altera nada, **não cria registro** (falha com `[REGISTRO_INEXISTENTE]`) e não mexe no status do registro.
+- **Complementar o que falta**: lê o portal de novo, inclui **só** as linhas que ainda faltam (e a transação da UF, se não existir),
+  salva e lê outra vez. Se depois disso ainda faltar linha, o job **falha** mesmo com os comandos tendo retornado OK. É idempotente:
+  se nada falta, só lê. **Não exclui e não altera quantidade** (o portal só tem "Excluir" por linha, e o que habilita esse botão ainda
+  precisa ser validado no portal real).
+- **Conferência automática** (`AUTO_CONFERIR=1`, padrão): depois de cada lançamento de comercialização concluído, enfileira a leitura
+  acima; o resultado aparece no selo da lista de registros.
+- Observação: as linhas do portal não trazem o id do produto; produtos com mesma descrição se distinguem pela quantidade (empates
+  são tratados como multiconjunto e avisados). O portal mostra o tipo da transação como "Expedição" (`tipoTransacao=V`), enquanto o
+  cadastro usa o rótulo "Venda": a detecção por rótulo não casa e o sistema trata qualquer transação como existente (conservador).
+
 ### De → Para (Admin › Constantes)
 
 - **Produtos (vendas)**: nome na planilha → descrição usada na busca do portal + ID do produto (+ apelidos de grafia).

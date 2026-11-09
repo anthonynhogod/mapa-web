@@ -153,7 +153,8 @@ def _jobs_view(filtro="abertos", limite=100):
             "inicio": j.started_at, "fim": j.finished_at,
             "erro": _resumo_erro(j.errors), "errors": list(j.errors or []),
             "incerto": bool(meta.get("incerto")),
-            "pode_retry": j.status == "FALHOU",
+            "etapa": {"conferencia": "Leitura do portal", "complemento": "Complemento"}.get(meta.get("tipo_job")),
+            "pode_retry": j.status == "FALHOU" and not meta.get("tipo_job"),
             "pode_limpar": j.status == "FALHOU" and meta.get("modulo") == "comercializacao" and backend != "api",
         })
     return out
@@ -308,6 +309,10 @@ def retry_job(job_id):
         flash(f"Job {job_id} não está em status FALHOU (atual: {job.status}).", "warning")
         return redirect(url_for('admin.threads'))
     
+    if (job.meta or {}).get("tipo_job"):
+        flash(f"Job {job_id} é uma leitura/complemento no portal e não tem retry: gere uma nova conferência em "
+              "Comercialização › Verificar lançamentos.", "warning")
+        return redirect(url_for('admin.threads'))
     limpar = request.form.get("limpar") == "1"
     registro: Registro = db.session.get(Registro, job.registro_id)
     if registro is None:

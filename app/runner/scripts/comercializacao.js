@@ -466,7 +466,9 @@
       return tb ? (S.tableOf(tb) || tb.parentElement) : null;
     };
     const acha = () => {
-      for (const linha of document.querySelectorAll("tr[data-rk]")) {
+      // so as linhas do RESULTADO DA BUSCA: na tela de alteracao as linhas de transacoes tambem tem data-rk (com outro id)
+      const tb = document.querySelector('tbody[id$="PesquisarProdutoPadronizado_data"]');
+      for (const linha of (tb ? tb.querySelectorAll("tr[data-rk]") : [])) {
         const rk = linha.getAttribute("data-rk");
         if (rk && re.test(rk)) {
           const radio = linha.querySelector(".ui-radiobutton-box");
@@ -531,7 +533,8 @@
       // 4) seleciona o produto e confirma
       if (!(await selecionarProduto(idProduto))) {
         // diagnóstico: o que a busca realmente devolveu (ajuda a ver se o id mudou no portal ou se a busca rodou vazia)
-        const vistos = Array.from(document.querySelectorAll("tr[data-rk]"))
+        const tbBusca = document.querySelector('tbody[id$="PesquisarProdutoPadronizado_data"]');
+        const vistos = Array.from(tbBusca ? tbBusca.querySelectorAll("tr[data-rk]") : [])
           .map(l => ((l.getAttribute("data-rk") || "").match(/id=(\d+)/) || [])[1]).filter(Boolean);
         S.closeDialogs(["dialogQueryProdutoPadronizado", "dialogInsertProdutoPadronizado"]);
         return `Erro: [PRODUTO_NAO_ENCONTRADO] id=${idProduto} ("${descricao}") não apareceu na busca do portal ` +
@@ -561,6 +564,96 @@
       console.error("incluirProdutoVenda:EXCEPTION", e);
       S.closeDialogs(["dialogQueryProdutoPadronizado", "dialogInsertProdutoPadronizado"]);
       return exc("EXC_INCLUIR_PRODUTO", e);
+    }
+  };
+
+  // ---------------------------------------------------------------
+  // Leitura do estado REAL do registro no portal (SOMENTE LEITURA)
+  // ---------------------------------------------------------------
+  // O portal lista cada linha lancada, sem agrupar:
+  //   dtbTransacoes: ID Transacao, tipo, UF/Provincia  (data-rk traz id, siglaUf, tipoTransacao)
+  //   dtbProduto   : ID Transacao, Produto, Quantidade ("2.987,050000")  (todas as transacoes do registro)
+  // O relatorio exportado agrupa por descricao; aqui nao. Serve para conferir o que foi gravado de verdade.
+  const numeroPt = (txt) => {
+    const t = String(txt == null ? "" : txt).replace(/[^\d,.\-]/g, "");
+    if (!t) return null;
+    const n = Number(t.replace(/\./g, "").replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // td -> { titulo normalizado: texto }, usando o <span class="ui-column-title"> de cada celula.
+  function celulasPorTitulo(tr) {
+    const out = {};
+    tr.querySelectorAll("td").forEach(td => {
+      const t = td.querySelector(".ui-column-title");
+      const titulo = S.norm(t ? t.textContent : "");
+      if (!titulo) return;
+      out[titulo] = (td.textContent || "").replace(t.textContent, "").replace(/\s+/g, " ").trim();
+    });
+    return out;
+  }
+
+  function paginasDe(container) {
+    const el = container && container.querySelector(".ui-paginator-current");
+    const m = el && /(\d+)\s*\/\s*(\d+)/.exec(el.textContent || "");
+    return m ? { atual: Number(m[1]), total: Number(m[2]) } : null;
+  }
+
+  // Percorre TODAS as paginas de uma tabela e devolve as linhas lidas; confere o numero de paginas com o do paginador.
+  async function lerTabela(seletor, lerLinha) {
+    const get = () => document.querySelector(seletor);
+    if (!get()) return { existe: false, linhas: [], paginas: 0 };
+    await S.pageTo(get, "first");
+    const esperado = (paginasDe(get()) || {}).total || 1;
+    const linhas = [];
+    let paginas = 0;
+    for (let guard = 0; guard < 400; guard++) {
+      paginas++;
+      get().querySelectorAll("tbody tr[data-ri]").forEach(tr => {
+        const l = lerLinha(tr);
+        if (l) linhas.push(l);
+      });
+      if (!(await S.pageTo(get, "next"))) break;
+    }
+    if (paginas !== esperado) {
+      throw new Error(`[LEITURA_INCOMPLETA] ${seletor}: li ${paginas} página(s), o paginador indica ${esperado}`);
+    }
+    await S.pageTo(get, "first");           // deixa a tabela como estava
+    return { existe: true, linhas, paginas };
+  }
+
+  window.lerRegistroComercializacao = async function lerRegistroComercializacao() {
+    try {
+      const F = formAtivo();
+      if (!F) return exc("SEM_FORMULARIO", "nenhum formulário de comercialização aberto");
+      S.clearMessages();
+
+      const tr = await lerTabela(`[id^="${esc(F)}:dtbTransacoes"].ui-datatable`, (linha) => {
+        const rk = linha.getAttribute("data-rk") || "";
+        const c = celulasPorTitulo(linha);
+        const pega = (re) => (re.exec(rk) || [])[1] || null;
+        const id = pega(/(?:^|[(,\s])id=(\d+)/) || (c["ID TRANSACAO"] || "").replace(/\D/g, "") || null;
+        const uf = (pega(/siglaUf=([A-Za-z]{2})/) || c["UF/PROVINCIA"] || "").trim().toUpperCase().slice(0, 2);
+        return { id, uf, tipo_codigo: pega(/tipoTransacao=(\w+)/), tipo: c["TIPO DE TRANSACAO"] || null,
+                 ambito: pega(/ambito=(\w+)/), operacao: pega(/operacao=(\w+)/) };
+      });
+      if (!tr.existe) return exc("SEM_TABELA_TRANSACOES", "tabela de transações não encontrada");
+
+      const pr = await lerTabela(`[id^="${esc(F)}:dtbProduto"].ui-datatable`, (linha) => {
+        const c = celulasPorTitulo(linha);
+        if (!c["PRODUTO"]) return null;
+        return { transacao: (c["ID TRANSACAO"] || "").replace(/\D/g, "") || null, produto: c["PRODUTO"],
+                 quantidade: numeroPt(c["QUANTIDADE"]), unidade: c["UNIDADE DE MEDIDA"] || null };
+      });
+
+      const resultado = {
+        transacoes: tr.linhas, produtos: pr.existe ? pr.linhas : [], tabela_produtos: pr.existe,
+        paginas: { transacoes: tr.paginas, produtos: pr.paginas }, lido_em: new Date().toISOString(),
+      };
+      return ok(JSON.stringify(resultado));
+    } catch (e) {
+      console.error("lerRegistroComercializacao:EXCEPTION", e);
+      return exc("EXC_LER_REGISTRO", e);
     }
   };
 

@@ -197,7 +197,9 @@ def base_do_registro(registro) -> Tuple[List[Dict[str, Any]], str, List[str], Op
     """
     from app.models import ExecJob, VendasTmp
     avisos: List[str] = []
-    jobs = ExecJob.query.filter_by(registro_id=registro.id).order_by(ExecJob.id.desc()).all()
+    # so jobs de LANCAMENTO: leituras/complementos no portal (tipo_job) nao carregam o plano do que foi enviado
+    jobs = [j for j in ExecJob.query.filter_by(registro_id=registro.id).order_by(ExecJob.id.desc()).all()
+            if not (j.meta or {}).get("tipo_job")]
     escolhido = next((j for j in jobs if j.status == "SUCESSO"), jobs[0] if jobs else None)
     if escolhido is not None:
         if escolhido.status != "SUCESSO":
