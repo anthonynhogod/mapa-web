@@ -25,3 +25,7 @@ MAPA_API_MD5=1             # senha em md5 no Basic (manual v1.3, item 2.1)
 # Formato de data dos corpos: iso (yyyy-mm-dd) | br (dd/mm/aaaa)
 MAPA_API_DATA_COMERCIALIZACAO=iso
 MAPA_API_DATA_ABATE=br
+
+# Confere/atualiza o chromedriver ao subir (modo navegador). 0 desliga.
+DRIVER_AUTOCHECK=1
+# Rede restrita (opcional, lidas pelo Selenium Manager): SE_PROXY=http://proxy:8080  SE_DRIVER_MIRROR_URL=...  SE_CACHE_PATH=...

@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from app import db
 from app.models import MapaCredencial
 from app.runner.web.navegador import Navegador
+from app.runner import drivers
+from app.runner.drivers import NavegadorIndisponivel
 import traceback
 from flask import current_app
 # TTL opcional para revalidar de tempos em tempos
@@ -32,7 +34,11 @@ def validate_credentials(cred: MapaCredencial, data_ref: str) -> tuple[bool, str
         )
         ok, err = nav.authenticate(cred.usuario_app, cred.senha)
         return (True, None) if ok else (False, err)
+    except NavegadorIndisponivel:
+        raise                                   # driver/Chrome: nao e culpa da credencial
     except Exception as e:
+        if drivers.eh_erro_de_driver(e):
+            raise NavegadorIndisponivel(drivers.explicar(e)) from e
         return False, str(e)
     finally:
         try:
@@ -43,6 +49,7 @@ def validate_credentials(cred: MapaCredencial, data_ref: str) -> tuple[bool, str
 def ensure_valid_credential(cred: MapaCredencial, data_ref: str) -> tuple[bool, str | None]:
     """
     Garante que a credencial está válida; se precisar, revalida e persiste.
+    Levanta NavegadorIndisponivel (sem marcar a credencial como inválida) se o Chrome/driver não abrir.
     """
     if not _needs_revalidate(cred):
         return True, None

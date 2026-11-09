@@ -3,6 +3,23 @@
 {% block content %}
 
         <h2 class="page-title">Threads e jobs</h2>
+        <h3 class="section-title">Navegador (Chrome + chromedriver)</h3>
+        <div class="alert {{ 'alert--warning' if driver.ok is none else ('' if driver.ok else 'alert--danger') }}">
+            <div class="alert__icon">{{ '⏳' if driver.ok is none else ('✅' if driver.ok else '⛔') }}</div>
+            <div class="alert__content">
+                <strong>{{ driver.mensagem }}</strong>
+                {% if driver.verificado_em %}<div class="muted">Verificado em {{ driver.verificado_em.strftime('%d/%m/%Y %H:%M:%S') }}</div>{% endif %}
+                {% if driver.tentativas %}
+                <details><summary>{{ driver.tentativas|length }} tentativa(s)</summary>
+                    <ul class="lista-motivos">{% for t in driver.tentativas %}<li>{{ '✔' if t.ok else '✘' }} {{ t.origem }} — {{ t.detalhe }}</li>{% endfor %}</ul>
+                </details>
+                {% endif %}
+                <form method="POST" action="{{ url_for('admin.driver_verificar') }}" class="form-actions" style="justify-content:flex-start">
+                    <button type="submit" class="btn btn--sm btn--outline">Verificar e atualizar driver agora</button>
+                </form>
+            </div>
+        </div>
+
         <h3 class="section-title">Iniciar workers</h3>
         <form method="POST" action="{{ url_for('admin.threads') }}">
             <div class="row grid-2">

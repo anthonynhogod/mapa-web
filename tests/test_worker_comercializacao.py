@@ -163,3 +163,19 @@ def test_worker_nao_repete_erro_de_negocio_mas_repete_transitorio(app, cenario, 
     monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavTimeout)
     assert _rodar_ate_terminar(app, job_id) == "FALHOU"
     assert NavFalso.instancias[-1].cmds.count(primeiro) == 2     # transitorio: repetiu
+
+
+def test_driver_indisponivel_falha_o_job_com_a_causa_certa(app, cenario, monkeypatch):
+    """Antes: 'Credenciais inválidas: Unable to obtain driver'. Agora: falha de infra, credencial intacta."""
+    from app.runner.drivers import NavegadorIndisponivel
+    reg_id, job_id = cenario
+
+    def sem_driver(cred, dia):
+        raise NavegadorIndisponivel("Navegador/driver do Chrome indisponível (não é problema das credenciais): x.")
+
+    monkeypatch.setattr(worker_mod, "ensure_valid_credential", sem_driver)
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    job = db.session.get(ExecJob, job_id)
+    assert "não é problema das credenciais" in job.errors[0] and "Credenciais inválidas" not in job.errors[0]
+    assert NavFalso.instancias == [] and db.session.get(Registro, reg_id).status == "ER"
+    assert MapaCredencial.query.one().validado is False and MapaCredencial.query.one().last_error is None

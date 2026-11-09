@@ -79,3 +79,13 @@ def test_registros_sem_job_sao_explicados(admin):
     db.session.commit()
     html = c.get("/admin/threads").get_data(as_text=True)
     assert "sem job na fila" in html and "Comercialização" in html
+
+
+def test_card_do_driver_e_botao_de_atualizar(admin, monkeypatch):
+    from app.runner import drivers
+    c, _ = admin
+    html = c.get("/admin/threads").get_data(as_text=True)
+    assert "Navegador (Chrome + chromedriver)" in html and "Verificar e atualizar driver agora" in html
+    monkeypatch.setattr(drivers, "atualizar", lambda: {**drivers.estado(), "ok": True, "mensagem": "Chrome 153 com chromedriver 153 (teste)."})
+    r = c.post("/admin/driver/verificar", follow_redirects=True)
+    assert "chromedriver 153 (teste)" in r.get_data(as_text=True)

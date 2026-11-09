@@ -21,6 +21,8 @@ from sqlalchemy.exc import OperationalError
 from app import db
 from app.models import ExecJob, Registro, MapaCredencial, WorkerSession  # Adicione WorkerSession
 from app.executor.credentials import ensure_valid_credential  # valida credenciais
+from app.runner import drivers
+from app.runner.drivers import NavegadorIndisponivel
 from app.mapa_api.execucao import executar_job_api
 
 _ACTIVE_NAV = set()
@@ -165,6 +167,16 @@ class Worker:
             # Armazena o ID para evitar DetachedInstanceError
             session_id = session.id
             
+            # Confere (uma vez por processo) se o chromedriver combina com o Chrome; atualiza se nao combinar.
+            # Falha aqui nao derruba o worker: cada job que precisar do navegador falha com a causa certa.
+            cfg = self.app.config
+            if not cfg.get("TESTING") and cfg.get("DRIVER_AUTOCHECK", True) and (cfg.get("EXEC_BACKEND") or "browser").lower() != "api":
+                try:
+                    st = drivers.garantir(explicito=cfg.get("CHROMEDRIVER_PATH"))
+                    print(f"[{self.name}] Driver do Chrome: {st['mensagem']}")
+                except Exception as e_drv:
+                    print(f"[{self.name}] Verificacao do driver falhou: {e_drv!r}")
+
             scripts_path = self.app.config.get("SCRIPTS_JS_PATH")
             last_check = time.time()
             while not self.stop_event.is_set(): 
@@ -247,7 +259,18 @@ class Worker:
                         print(f"[{self.name}] job={job.id} {job.status} (api): {msg_api[:200]}")
                         continue
 
-                    ok, err = ensure_valid_credential(cred, dia_str)
+                    try:
+                        ok, err = ensure_valid_credential(cred, dia_str)
+                    except NavegadorIndisponivel as e_nav:
+                        # Chrome/driver nao abre: falha de INFRA, a credencial nao foi testada e nao e marcada invalida
+                        job.status = "FALHOU"
+                        job.finished_at = dt.datetime.utcnow()
+                        job.errors = (job.errors or []) + [str(e_nav)]
+                        registro.status = "ER"
+                        registro.data_fim = job.finished_at
+                        db.session.commit()
+                        print(f"[{self.name}] job={job.id} FALHOU: {e_nav}")
+                        continue
                     if not ok:
                         job.status = "FALHOU"
                         job.finished_at = dt.datetime.utcnow()
@@ -376,7 +399,12 @@ class Worker:
                         if job:
                             job.status = "FALHOU"
                             job.finished_at = dt.datetime.utcnow()
-                            job.errors = (job.errors or []) + [repr(e), tb]
+                            if isinstance(e, NavegadorIndisponivel):
+                                job.errors = (job.errors or []) + [str(e)]
+                            elif drivers.eh_erro_de_driver(e):
+                                job.errors = (job.errors or []) + [drivers.explicar(e)]
+                            else:
+                                job.errors = (job.errors or []) + [repr(e), tb]
                             if console_errs:
                                 job.errors = job.errors + ["[JS-CONSOLE] " + " | ".join(console_errs)]
                             # Registro -> ER

@@ -172,6 +172,16 @@ def _registros_sem_job():
     return {("Comercialização" if t == "comercializacao" else "Abate"): n for t, n in linhas}
 
 
+@bp.route("/driver/verificar", methods=["POST"])
+@admin_required
+def driver_verificar():
+    """Refaz a verificacao do chromedriver (baixa/atualiza se nao combinar com o Chrome). Pode levar alguns segundos."""
+    from app.runner import drivers
+    st = drivers.atualizar()
+    flash(st["mensagem"], "success" if st["ok"] else "danger")
+    return redirect(url_for("admin.threads"))
+
+
 @bp.route("/threads/jobs", methods=["GET"])
 @admin_required
 def threads_jobs_fragmento():
@@ -207,8 +217,9 @@ def threads():
 
     # GET: a pagina mostra o que a ultima atualizacao automatica mostraria (mesmos parciais)
     filtro = _filtro_jobs(request.args.get("filtro"))
+    from app.runner import drivers
     return render_template(
-        "admin/threads.html", filtro=filtro, jobs=_jobs_view(filtro), workers=_workers_view(),
+        "admin/threads.html", driver=drivers.estado(), filtro=filtro, jobs=_jobs_view(filtro), workers=_workers_view(),
         sem_job=_registros_sem_job(), FILTROS=FILTROS_JOBS,
     )
 # Remova import signal se estiver lá

@@ -58,3 +58,17 @@ def init_db():
     n2 = seed_comercializacao()
     stamp()
     click.echo(f"Banco inicializado. Constantes: abate={n1}, comercializacao={n2}.")
+
+
+@click.command("driver-check")
+@click.option("--atualizar/--so-verificar", default=True, help="Baixa o driver certo se o atual nao servir (padrao).")
+@with_appcontext
+def driver_check(atualizar):
+    """Confere se o chromedriver combina com o Chrome instalado e, se nao, atualiza."""
+    from app.runner import drivers
+    from flask import current_app
+    st = drivers.garantir(forcar=True, explicito=current_app.config.get("CHROMEDRIVER_PATH"))
+    for t in st["tentativas"]:
+        click.echo(f"  [{'ok' if t['ok'] else '--'}] {t['origem']}: {t['detalhe']}")
+    click.echo(("OK: " if st["ok"] else "FALHOU: ") + st["mensagem"])
+    raise SystemExit(0 if st["ok"] else 1)

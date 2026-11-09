@@ -61,6 +61,10 @@ def create_app():
 
     init_worker_cli(app)
 
+    # Confere/atualiza o chromedriver em segundo plano (so em `flask run`/worker, modo navegador)
+    from app.runner.drivers import verificar_na_inicializacao
+    verificar_na_inicializacao(app)
+
     login_manager.init_app(app)
     login_manager.login_view = "auth.login"
 
@@ -94,9 +98,10 @@ def create_app():
     from flask_cors import CORS
     CORS(app, resources=app.config.get("CORS_RESOURCES", {r"/api/*": {"origins": "*"}}))
 
-    from .cli import users_promote, users_create, init_db
+    from .cli import users_promote, users_create, init_db, driver_check
     app.cli.add_command(users_promote)
     app.cli.add_command(users_create)
     app.cli.add_command(init_db)
+    app.cli.add_command(driver_check)
 
     return app

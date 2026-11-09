@@ -27,6 +27,7 @@ except Exception:
 
 # Exceções internas do app
 from app.runner.exceptions import FalhaNoJavascript
+from app.runner import drivers
 from app.logic.js_literal import js_str
 
 # --- Constantes de ambiente/rota/UI ---
@@ -89,7 +90,19 @@ class Navegador(webdriver.Chrome):
         # -> driver embutido em runner/drivers -> Selenium Manager (baixa o driver certo sozinho).
         # Caminho que nao existe NAO derruba mais a execucao: cai para o proximo.
         service = self._resolver_service(chromedriver_path)
-        super().__init__(service=service, options=self.options)
+        try:
+            super().__init__(service=service, options=self.options)
+        except Exception as e:
+            if not drivers.eh_erro_de_driver(e):
+                raise
+            # Driver/Chrome fora de sintonia (ex.: o Chrome se atualizou): atualiza o driver e tenta UMA vez.
+            logging.getLogger(__name__).warning("Falha ao abrir o Chrome (%s); verificando/atualizando o driver.",
+                                                drivers._resumir(e))
+            st = drivers.garantir(forcar=True, explicito=chromedriver_path)
+            if not st["ok"]:
+                raise drivers.NavegadorIndisponivel(st["mensagem"]) from e
+            novo = Service(executable_path=st["driver_path"]) if st["driver_path"] else Service()
+            super().__init__(service=novo, options=self.options)
         self.set_script_timeout(120)
 
         # Perfis de velocidade
@@ -129,6 +142,9 @@ class Navegador(webdriver.Chrome):
     @staticmethod
     def _resolver_service(chromedriver_path: str | None) -> Service:
         log = logging.getLogger(__name__)
+        verificado = drivers.driver_verificado()     # ja testado contra o Chrome instalado (drivers.garantir)
+        if verificado and os.path.isfile(verificado):
+            return Service(executable_path=verificado)
         base_dir = os.path.join(os.path.dirname(__file__), "..", "drivers")
         candidatos = [
             chromedriver_path,

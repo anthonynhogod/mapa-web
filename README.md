@@ -41,6 +41,22 @@ flask worker run --threads 1 --profile dev   # executor (outro terminal)
 
 O driver do Chrome é resolvido sozinho (Selenium Manager) quando `CHROMEDRIVER_PATH` está vazio ou aponta para um arquivo que não existe.
 
+## Chrome e chromedriver (modo `browser`)
+
+O driver precisa ter a mesma versão principal do Chrome. Para não depender de ninguém lembrar de atualizar:
+
+- Na **inicialização** (`flask run` e ao subir um worker) o sistema abre o Chrome de verdade (headless) com os drivers
+  conhecidos (`CHROMEDRIVER_PATH`, `app/runner/drivers/`); se nenhum combina, pede ao **Selenium Manager**
+  (embutido no pacote `selenium`) o driver certo, baixa e guarda em cache. Drivers soltos no `PATH` são ignorados primeiro
+  (causa clássica de versão errada). Se o Chrome falhar ao abrir durante um lançamento, ele se atualiza e tenta uma vez.
+- **Admin › Configurações › Threads** mostra o estado (versões, tentativas) e tem o botão *Verificar e atualizar driver agora*.
+  Pela linha de comando: `flask driver-check`.
+- Falha de driver/Chrome **não** é mais reportada como "credenciais inválidas": o job falha com a causa real e a
+  credencial não é marcada como inválida.
+- Rede restrita? O download usa `googlechromelabs.github.io` e `storage.googleapis.com`. Libere esses hosts, ou defina
+  `SE_PROXY`, `SE_DRIVER_MIRROR_URL`, `SE_CACHE_PATH` (variáveis do Selenium Manager; veja `selenium-manager --help`), ou
+  copie um `chromedriver` compatível para `app/runner/drivers/`. `DRIVER_AUTOCHECK=0` desliga a verificação na inicialização.
+
 ## Módulo Comercialização
 
 1. **Comercialização › Nova planilha**: envie o `.xlsx`. O sistema acha o cabeçalho (`PRODUTO`, `ESTADO`, `QUANTIDADE`, `CÓDIGO` opcional) em qualquer linha e lê o período do título (`... Vendas - 01/03/2026 até 31/03/2026`). Se o título não tiver o período, informe as datas no formulário.
