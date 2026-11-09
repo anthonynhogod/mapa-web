@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "_macros/status.html" import status_badge %}
 {% block title %}Principal{% endblock %}
 {% block mini_painel %}
 <div class="mini-painel">
@@ -34,8 +35,8 @@
 {% endblock %}
 {% block content %}
 {% if registros %}
-<div class="titulo-form">Últimos registros</div>
-<table class="tabela-registros">
+<h2 class="titulo-form">Últimos registros</h2>
+<div class="table-scroll"><table class="tabela-registros">
     <thead>
         <tr>
             <th>Data</th>
@@ -50,10 +51,12 @@
             <td>{{ r.periodo_label }}</td>
             <td>{{ r.tipo_label if r.is_comercializacao else r.especie }}</td>
             <td>{{ r.obs or 'Sem Observações' }}</td>
-            <td>{{ r.status }}</td>
+            <td>{{ status_badge(r.status) }}</td>
         </tr>
         {% endfor %}
     </tbody>
-</table>
+</table></div>
+{% else %}
+<p class="muted">Nenhum registro ainda. Comece por <a href="{{ url_for('registros.novo') }}">Registros › Novo</a> ou <a href="{{ url_for('comercializacao.novo') }}">Comercialização › Nova planilha</a>.</p>
 {% endif %}
 {% endblock %}

@@ -1,16 +1,17 @@
 {% extends "layout.html" %}
 {% from "_macros/pagination.html" import render_pagination_numeric %}
+{% from "_macros/status.html" import status_badge %}
 {% block title %}Comercialização — Registros{% endblock %}
 {% block content %}
 {% block mini_painel %}
 {% endblock %}
-<div class="row" style="justify-content: space-between; align-items: center;">
-  <div class="titulo-form">Registros de Comercialização</div>
-  <a class="btn btn--outline" href="{{ url_for('comercializacao.novo') }}">Nova planilha</a>
+<div class="page-head">
+  <h2 class="titulo-form">Registros de Comercialização</h2>
+  <a class="btn" href="{{ url_for('comercializacao.novo') }}">Nova planilha</a>
 </div>
 
 {% if registros %}
-<table class="tabela-registros">
+<div class="table-scroll"><table class="tabela-registros">
   <thead>
     <tr><th>Tipo</th><th>Período</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
   </thead>
@@ -20,18 +21,18 @@
       <td>{{ r.lancamento or 'venda' }}</td>
       <td>{{ r.periodo_label }}</td>
       <td>{{ r.obs or 'Sem Observações' }}</td>
-      <td>{{ STATUS_LABELS.get(r.status, r.status) }}</td>
-      <td>
+      <td>{{ status_badge(r.status) }}</td>
+      <td class="acoes">
         {% if r.status == "AT" %}
-        <a href="{{ url_for('comercializacao.preview', registro_id=r.id) }}" class="btn btn--outline">Preview / Executar</a>
+        <a href="{{ url_for('comercializacao.preview', registro_id=r.id) }}" class="btn btn--sm btn--outline">Preview / Executar</a>
         {% endif %}
-        <button type="button" class="btn" data-url="{{ url_for('registros.excluir', registro_id=r.id) }}"
+        <button type="button" class="btn btn--sm btn--danger" data-url="{{ url_for('registros.excluir', registro_id=r.id) }}"
           data-descricao="a comercialização de {{ r.periodo_label }}" onclick="confirmarExclusao(this)">Excluir</button>
       </td>
     </tr>
     {% endfor %}
   </tbody>
-</table>
+</table></div>
 <div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
 {% else %}
 <p>Nenhum registro de comercialização. <a href="{{ url_for('comercializacao.novo') }}">Envie uma planilha</a>.</p>

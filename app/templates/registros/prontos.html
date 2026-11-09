@@ -8,7 +8,7 @@
 
 
 {% if registros %}
-<table class="tabela-registros">
+<div class="table-scroll"><table class="tabela-registros">
     <thead>
         <tr>
             <th>Data</th>
@@ -44,7 +44,7 @@
         </tr>
         {% endfor %}
     </tbody>
-</table>
+</table></div>
 <div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
 {% else %}
 <p>Nenhum registro encontrado.</p>

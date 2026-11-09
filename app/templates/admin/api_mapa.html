@@ -15,7 +15,7 @@
 
 <h3 class="titulo-form">Espécies (id em GET /especies)</h3>
 <div class="table-scroll">
-  <table class="tabela-registros">
+  <table class="tabela-registros tabela-registros--esq">
     <thead><tr><th>Espécie</th><th>ID na API</th><th>Ação</th></tr></thead>
     <tbody>
       {% for e in especies %}
@@ -33,7 +33,7 @@
   </table>
 </div>
 
-<h3 class="titulo-form" style="margin-top:20px;">Catálogos</h3>
+<h3 class="titulo-form">Catálogos</h3>
 <p style="opacity:.8; font-size:.9em;">
   Usa as <em>suas</em> Credenciais MAPA. “Sincronizar” preenche os ids da API que estiverem vazios quando o nome
   casar de forma inequívoca com o De→Para (não sobrescreve o que você já informou).
@@ -48,7 +48,7 @@
 </div>
 
 {% if relatorio %}
-<h3 class="titulo-form" style="margin-top:20px;">Resultado da sincronização</h3>
+<h3 class="titulo-form">Resultado da sincronização</h3>
 {% for nome, r in relatorio.items() %}
 <details open style="margin-bottom:10px;">
   <summary><strong>{{ nome }}</strong> — {{ r.total }} no catálogo; {{ r.preenchidos|length }} preenchido(s);

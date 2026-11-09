@@ -1,8 +1,8 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}Validação bloqueada — Registro #{{ registro.id }}{% endblock %}
-{% block main %}
-
-<section class="painel">
+{% block mini_painel %}{% endblock %}
+{% block content %}
+<section>
   <h2 class="titulo-form">Lançamento vetado — nada foi enviado ao MAPA</h2>
 
   {% if bloqueios %}
@@ -29,7 +29,7 @@
 
   {% if pendencias %}
   <div class="table-scroll">
-    <table class="tabela-registros">
+    <table class="tabela-registros tabela-registros--esq">
       <thead>
         <tr>
           <th>Tipo</th>

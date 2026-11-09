@@ -1,8 +1,9 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}Preview Comercialização{% endblock %}
-{% block main %}
-<div class="painel preview-panel">
-  <h2 class="titulo-form" style="padding:12px; border-radius:10px;">
+{% block mini_painel %}{% endblock %}
+{% block content %}
+<div class="preview-panel">
+  <h2 class="titulo-form">
     Preview — Comercialização ({{ registro.lancamento or 'venda' }}) {{ registro.periodo_label }}
   </h2>
 

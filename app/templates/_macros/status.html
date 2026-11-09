@@ -1,0 +1,5 @@
+{# Badge de status de Registro (AT/PT/FZ/ER). Uso: {% from "_macros/status.html" import status_badge %} #}
+{% macro status_badge(s) -%}
+{% set m = {'AT': ('Em andamento', 'info'), 'PT': ('Pendente', 'warning'), 'FZ': ('Finalizado', 'success'), 'ER': ('Erro', 'danger')} %}
+{% set v = m.get(s, (s, 'neutral')) %}<span class="badge badge--{{ v[1] }}">{{ v[0] }}</span>
+{%- endmacro %}

@@ -310,3 +310,22 @@ function attachConfirmBeforeOverwrite(formId, filetype) {
 attachConfirmBeforeOverwrite("form-gta", "gta");
 attachConfirmBeforeOverwrite("form-dif", "dif");
 attachConfirmBeforeOverwrite("form-sif", "sif");
+
+/* ============================================================
+   Menu lateral no celular: botao "Menu" que abre/fecha a lista
+============================================================ */
+window.addEventListener("DOMContentLoaded", () => {
+    const menu = document.querySelector(".menu-lateral");
+    if (!menu || document.querySelector(".menu-toggle")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn--outline menu-toggle";
+    btn.setAttribute("aria-expanded", "false");
+    btn.dataset.noLoader = "true";
+    btn.textContent = "☰ Menu";
+    btn.addEventListener("click", () => {
+        const aberto = menu.classList.toggle("is-open");
+        btn.setAttribute("aria-expanded", String(aberto));
+    });
+    menu.parentNode.insertBefore(btn, menu);
+});

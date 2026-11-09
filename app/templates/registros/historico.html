@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "_macros/status.html" import status_badge %}
 {% from "_macros/pagination.html" import render_pagination_numeric %}
 {% block title %}Histórico{% endblock %}
 {% block content %}
@@ -63,13 +64,11 @@
     </thead>
     <tbody>
       {% if registros %}
-      {% set chip_map = {'AT':'chip--info','PT':'chip--warning','FZ':'chip--success','ER':'chip--danger'} %}
       {% for r in registros %}
       <tr>
         <td>{{ r.id }}</td>
         <td>{{ r.periodo_label }}</td>
-        <td><span class="chip {{ chip_map.get(r.status, 'chip--info') }}">{{ STATUS_LABELS.get(r.status, r.status)
-            }}</span></td>
+        <td>{{ status_badge(r.status) }}</td>
         <td>{{ r.tipo_label if r.is_comercializacao else r.especie }}</td>
         <td>{{ r.obs or '—' }}</td>
         <!-- Tempo de execução baseado em data_inicio e data_fim de Registro -->

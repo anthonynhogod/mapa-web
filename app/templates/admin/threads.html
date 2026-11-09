@@ -32,7 +32,7 @@
         </form>
         <h3 class="section-title">Workers</h3>
         <div class="table-scroll">
-        <table class="tabela-registros">
+        <table class="tabela-registros tabela-registros--esq">
             <thead><tr><th>ID</th><th>Nome</th><th>Perfil</th><th>Threads</th><th>Status</th><th>Iniciado em</th><th>Ação</th></tr></thead>
             <tbody id="workers-tbody">{% include "admin/_threads_workers.html" %}</tbody>
         </table>
@@ -50,7 +50,7 @@
             Só viram job depois de <em>Confirmar &amp; Executar</em> no preview.</p>
         {% endif %}
         <div class="table-scroll">
-        <table class="tabela-registros">
+        <table class="tabela-registros tabela-registros--esq">
             <thead><tr><th>Job</th><th>Lançamento</th><th>Status</th><th>Progresso</th><th>Início / Fim</th><th>Erros</th><th>Ações</th></tr></thead>
             <tbody id="jobs-tbody" data-filtro="{{ filtro }}">{% include "admin/_threads_jobs.html" %}</tbody>
         </table>

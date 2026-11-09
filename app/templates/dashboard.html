@@ -58,6 +58,16 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   (function () {
+    // Fallback: o Chart.js vem de CDN; se nao carregar, avisa em vez de quebrar a pagina com ReferenceError
+    if (typeof Chart === 'undefined') {
+      document.querySelectorAll('canvas').forEach(c => {
+        const p = document.createElement('p');
+        p.className = 'muted';
+        p.textContent = 'Gráfico indisponível: não foi possível carregar o Chart.js. Verifique a conexão e recarregue.';
+        c.replaceWith(p);
+      });
+      return;
+    }
     const colors = { AT: '#0dcaf0', PT: '#f9b234', FZ: '#1fbf75', ER: '#e14d4d' };
     function destroyIfExists(id) { const c = Chart.getChart(id); if (c) c.destroy(); }
     async function loadData() { const res = await fetch("{{ url_for('public.dashboard_data') }}"); if (!res.ok) throw new Error('Falha ao carregar dados'); return res.json(); }
