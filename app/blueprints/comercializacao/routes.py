@@ -16,6 +16,7 @@ from app.forms import UploadVendasForm
 from app.logic.comercializacao import (
     build_commands, build_plano, rotulos_ativos, tipo_config, totais as plano_totais,
 )
+from app.logic.bloqueios import avaliar_credencial, motivos_pendencias, resumo_flash
 from app.logic.constantes import ColetorPendencias, ConstanteNaoMapeada
 from app.models import ExecJob, MapaCredencial, Registro, TipoLancamento, UploadStatus, VendasTmp
 from app.utils.audit import log_action
@@ -208,17 +209,18 @@ def preview(registro_id: int):
         plano = build_plano(records, coletor, backend="browser")
         comandos = build_commands(plano, tipo=tipo_config(tipo), rotulos=rotulos_ativos()) if coletor.vazio else []
 
+    _cred, bloqueios = avaliar_credencial(registro.user_id)
     if not coletor.vazio:
         return render_template(
             "registros/preview/pendencias.html",
-            registro=registro, pendencias=coletor.listar(), gta_source=None,
+            registro=registro, pendencias=coletor.listar(), gta_source=None, bloqueios=bloqueios,
             voltar_url=url_for("comercializacao.preview", registro_id=registro.id),
         )
 
     return render_template(
         "comercializacao/preview.html",
         registro=registro, plano=plano, totais=plano_totais(plano), meta=meta,
-        comandos=comandos, tmp=tmp, modo_api=usa_api(),
+        comandos=comandos, tmp=tmp, modo_api=usa_api(), bloqueios=bloqueios,
     )
 
 
@@ -233,7 +235,7 @@ def finalizar(registro_id: int):
         flash("Registro nao esta em aberto para finalizacao.", "warning")
         return redirect(url_for("comercializacao.lista"))
 
-    cred = MapaCredencial.query.filter_by(owner_user_id=current_user.id).first()
+    cred, bloqueios = avaliar_credencial(current_user.id)
     if cred is None:
         flash("Cadastre suas credenciais do MAPA antes de executar (Configuracoes > Credenciais MAPA).", "warning")
         return redirect(url_for("public.credenciais_mapa"))
@@ -254,6 +256,21 @@ def finalizar(registro_id: int):
     if tipo is None:
         flash("O tipo de lançamento deste registro não está ativo. Ative-o em Admin > Constantes.", "danger")
         return redirect(url_for("comercializacao.lista"))
+
+    # VETO: refaz a checagem completa no servidor (a tela pode estar velha) e lista TODOS os motivos
+    coletor = ColetorPendencias()
+    try:
+        if usa_api():
+            preparar_comercializacao(registro, records, tipo, coletor)
+        else:
+            build_plano(records, coletor, backend="browser")
+    except NotImplementedError as e:
+        flash(escape(str(e)), "warning")
+        return redirect(url_for("comercializacao.lista"))
+    motivos = bloqueios + motivos_pendencias(coletor)
+    if motivos:
+        flash(resumo_flash("Lançamento vetado — nada foi enviado ao MAPA:", motivos), "danger")
+        return redirect(url_for("comercializacao.preview", registro_id=registro.id))
 
     extra = {
         "modulo": TIPO,

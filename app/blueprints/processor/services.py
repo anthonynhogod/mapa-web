@@ -60,7 +60,7 @@ def _normalize_especie(value: Optional[str]) -> str:
         return "ave"   # sua pasta é 'ave'
     if v in {"bovino", "bovinos", "bov.", "bovino(a)"}:
         return "bovino"
-    return v or "suino"
+    return v     # vazio continua vazio: sem espécie não há validação (nada de assumir suíno)
 
 def _load_species_module(especie: str):
     """Importa o módulo validate da espécie, com fallback para suino."""
@@ -97,8 +97,15 @@ def _validate_by_species(filetype: str, fullpath: str, registro_id: int) -> Dict
     df = _read_excel(fullpath)
     reg = db.session.get(Registro, registro_id)
     especie = _normalize_especie(getattr(reg, 'especie', None) if reg else None)
-    _load_species_module(especie)   # garante que o validate.py registre o profile
-    profile = get_profile(especie)
+    try:
+        _load_species_module(especie)   # garante que o validate.py registre o profile
+        profile = get_profile(especie)
+    except (ImportError, KeyError):
+        raise ValidationFailed(
+            errors=[{"level": "error", "where": "espécie",
+                     "message": f"A espécie {especie!r} do registro não tem validador cadastrado; "
+                                "nenhum arquivo foi aceito. Crie o registro com uma espécie suportada."}],
+            warnings=[], message="Espécie não suportada.")
     func_map = {
         'gta': profile.validar_gta,
         'dif': profile.validar_dif,

@@ -3,20 +3,31 @@
 {% block main %}
 
 <section class="painel">
-  <h2 class="titulo-form">Validação bloqueada</h2>
+  <h2 class="titulo-form">Lançamento vetado — nada foi enviado ao MAPA</h2>
 
+  {% if bloqueios %}
+  <div class="alert alert--danger">
+    <div class="alert__icon">⛔</div>
+    <div class="alert__content"><strong>{{ "Também impedem" if pendencias else "Impedem" }} o envio:</strong>
+      <ul class="lista-motivos">{% for m in bloqueios %}<li>{{ m }}</li>{% endfor %}</ul>
+    </div>
+  </div>
+  {% endif %}
+  {% if pendencias %}
   <p>
     O registro <strong>#{{ registro.id }}</strong> ({{ registro.periodo_label }})
     não pode ser validado: {{ pendencias|length }}
     {{ 'termo não possui vínculo' if pendencias|length == 1 else 'termos não possuem vínculo' }}
     com o sistema do MAPA.
   </p>
+  {% endif %}
 
-  <p style="opacity:.8;">
+  <p class="muted">
     Enquanto houver pendência, nada é enviado ao portal. Cadastre o vínculo em
     Constantes ou corrija a planilha, e valide novamente.
   </p>
 
+  {% if pendencias %}
   <div class="table-scroll">
     <table class="tabela-registros">
       <thead>
@@ -24,6 +35,7 @@
           <th>Tipo</th>
           <th>Termo encontrado na planilha</th>
           <th>Ocorrências</th>
+          <th>Como resolver</th>
           {% if current_user.is_admin %}<th>Ações</th>{% endif %}
         </tr>
       </thead>
@@ -31,15 +43,11 @@
         {% for p in pendencias %}
         <tr>
           <td>
-            {% set rotulos = {'diagnostico': 'Diagnóstico', 'parte': 'Parte afetada', 'destino': 'Destino',
-                              'produto_venda': 'Produto (vendas)', 'estado_venda': 'Estado (vendas)',
-                              'diagnostico_api': 'Diagnóstico sem ID da API', 'parte_api': 'Parte afetada sem ID da API',
-                              'destino_api': 'Destino sem ID da API', 'produto_api': 'Produto sem cod_produto da API',
-                              'especie_api': 'Espécie sem ID da API', 'credencial': 'Credenciais MAPA incompletas'} %}
-            {{ rotulos.get(p.tipo, p.tipo) }}
+            {{ p.rotulo }}
           </td>
-          <td><strong>{{ p.valor }}</strong></td>
+          <td><strong>{{ p.valor or "(vazio)" }}</strong></td>
           <td>{{ p.ocorrencias }}</td>
+          <td class="muted">{{ p.como }}</td>
           {% if current_user.is_admin %}
           <td class="acoes">
             {% set secoes_por_tipo = {'diagnostico': 'diagnosticos', 'parte': 'partes', 'destino': 'destinos',
@@ -62,14 +70,15 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
 
-  {% if not current_user.is_admin %}
-  <p style="margin-top:14px;">
-    O cadastro de vínculos é feito por um administrador.
+  {% if pendencias and not current_user.is_admin %}
+  <p class="muted">
+    O cadastro de vínculos é feito por um administrador: envie esta lista a ele.
   </p>
   {% endif %}
 
-  <div class="row" style="gap:8px; margin-top:20px;">
+  <div class="form-actions">
     <a class="btn btn--outline"
        href="{{ voltar_url or url_for('registros.preview_registro', registro_id=registro.id) }}">Validar novamente</a>
     <a class="btn btn--outline" href="{{ url_for('public.main') }}">Voltar</a>

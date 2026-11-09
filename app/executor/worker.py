@@ -48,6 +48,15 @@ def shutdown_all_browsers():
 
 atexit.register(shutdown_all_browsers)
 
+def _pode_repetir(nav, resultado) -> bool:
+    """True so para erro que o navegador classifica como transitorio (nao ha como saber se um erro desconhecido ja gravou)."""
+    classificar = getattr(nav, "_erro_transitorio", None)
+    try:
+        return bool(classificar and classificar(resultado))
+    except Exception:
+        return False
+
+
 class Worker:
     def __init__(self, app, name: str = "worker", profile: str = "prod", stop_event: threading.Event = None):
         try:
@@ -304,8 +313,12 @@ class Worker:
                                 if isinstance(last_result, str) and "[SESSION_CLOSED]" in last_result:
                                     raise RuntimeError("SESSION_CLOSED")
                                 if isinstance(last_result, str) and last_result.strip().lower().startswith("erro"):
-                                    time.sleep(0.3)
-                                    continue
+                                    # So repete erro TRANSITORIO (timeout, helper ausente...). Erro de negocio
+                                    # ou desconhecido nao e relancado: comandos como incluirGta/incluirProduto
+                                    # nao sao idempotentes e duplicariam o lancamento no MAPA.
+                                    if _pode_repetir(nav, last_result):
+                                        time.sleep(0.3)
+                                        continue
                                 break
                             
                             job.progress = i + 1

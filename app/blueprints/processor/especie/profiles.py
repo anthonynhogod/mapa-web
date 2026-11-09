@@ -31,13 +31,10 @@ def get_profile(especie: str) -> SpeciesProfile:
     key = (especie or '').strip().lower()
     if key in _registry:
         return _registry[key]
-    # Fallback para 'suino' se existir
-    if 'suino' in _registry:
-        current_app.logger.warning(f"Perfil para '{especie}' não encontrado, usando 'suino' como fallback")
-        return _registry['suino']
-    # Se nenhum perfil, log e raise com mais info
+    # SEM fallback: uma especie sem perfil nao pode ser validada "como se fosse" outra (ex.: suino),
+    # senao os dados seriam lancados no MAPA com as regras erradas.
     available = list(_registry.keys())
-    current_app.logger.error(f"Nenhum perfil registrado. Disponíveis: {available}")
+    current_app.logger.error(f"Perfil de espécie '{especie}' não registrado. Disponíveis: {available}")
     raise KeyError(
         f"Perfil de espécie '{especie}' não registrado. "
         f"Perfis disponíveis: {available}"

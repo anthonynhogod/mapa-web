@@ -9,7 +9,7 @@ from werkzeug.security import generate_password_hash
 from app.executor import worker as worker_mod
 from app.extensions import db
 from app.logic.comercializacao import build_commands, build_plano
-from app.models import ExecJob, MapaCredencial, Registro, Role, Usuario
+from app.models import ExecJob, MapaCredencial, Registro, Role, Usuario, VendasTmp
 
 
 class NavFalso:
@@ -59,6 +59,8 @@ def cenario(app, monkeypatch):
     db.session.flush()
     venda = {"rotulo": "Venda", "tipo_transacao_idx": 1, "ambito_idx": 1, "operador_idx": 2}
     cmds = build_commands(build_plano([{"produto": "BACON", "uf": "RS", "quantidade": 3}], backend="browser"), tipo=venda)
+    db.session.add(VendasTmp(registro_id=reg.id, uploaded_by=u.id, filename="v.xlsx", model="venda",
+                             payload={"records": [{"produto": "BACON", "uf": "RS", "quantidade": 3}], "meta": {}}))
     job = ExecJob(registro_id=reg.id, owner_user_id=u.id, gta_source="vendas", commands=cmds,
                   meta={"modulo": "comercializacao", "numero_sif": "999"}, status="ESPERA", errors=[])
     db.session.add(job)
@@ -122,9 +124,42 @@ def test_retry_limpando_portal_troca_primeiro_comando(app, cenario):
     assert job.status == "ESPERA" and job.commands[0] == 'limparTransacoes("Venda", ["Venda"])'
     assert db.session.get(Registro, reg_id).status == "PT"
 
-    # retry normal nao mexe nos comandos
+    # retry normal NUNCA limpa o portal: volta ao comando que aborta se ja houver dados
     job.status = "FALHOU"
     db.session.commit()
     c.post(f"/admin/retry-job/{job_id}")
     db.session.expire_all()
-    assert db.session.get(ExecJob, job_id).commands[0].startswith("limparTransacoes(")
+    assert db.session.get(ExecJob, job_id).commands[0].startswith("verificarRegistroVazio(")
+
+
+def test_worker_nao_repete_erro_de_negocio_mas_repete_transitorio(app, cenario, monkeypatch):
+    """Comandos nao idempotentes (incluirGta/incluirProduto) nao podem ser relancados apos erro de negocio."""
+    reg_id, job_id = cenario
+
+    class NavDuasTentativas(NavFalso):
+        WORKER_ATTEMPTS = 2
+
+        @classmethod
+        def _erro_transitorio(cls, msg):
+            return "[timeout]" in (msg or "").lower()
+
+    monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavDuasTentativas)
+    primeiro = db.session.get(ExecJob, job_id).commands[0]
+
+    NavFalso.falhar_em = primeiro                     # erro de negocio -> 1 chamada so
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    assert NavFalso.instancias[-1].cmds.count(primeiro) == 1
+
+    job = db.session.get(ExecJob, job_id)
+    job.status, job.errors, job.progress = "ESPERA", [], 0
+    db.session.commit()
+    NavFalso.instancias.clear()
+
+    class NavTimeout(NavDuasTentativas):
+        def executar_comando(self, cmd, ctx=""):
+            self.cmds.append(cmd)
+            return "Erro: [TIMEOUT] sem resposta" if cmd == primeiro else "OK"
+
+    monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavTimeout)
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    assert NavFalso.instancias[-1].cmds.count(primeiro) == 2     # transitorio: repetiu

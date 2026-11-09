@@ -151,8 +151,25 @@
         </pre>
       </div>
     </div>
+    {% if bloqueios %}
+    <div class="alert alert--danger">
+      <div class="alert__icon">⛔</div>
+      <div class="alert__content"><strong>Este lançamento não pode ser enviado:</strong>
+        <ul class="lista-motivos">{% for m in bloqueios %}<li>{{ m }}</li>{% endfor %}</ul>
+        <a class="btn btn--sm btn--outline" href="{{ url_for('public.credenciais_mapa') }}">Ir para Credenciais MAPA</a>
+      </div>
+    </div>
+    {% endif %}
+    {% if avisos_api %}
+    <div class="alert alert--warning">
+      <div class="alert__icon">⚠️</div>
+      <div class="alert__content"><strong>Atenção antes de confirmar:</strong>
+        <ul class="lista-motivos">{% for a in avisos_api %}<li>{{ a }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+    {% endif %}
     <form action="{{ url_for('registros.finalizar_validacao', registro_id=registro.id) }}" method="post">
-      <button class="btn" type="submit">Confirmar & Executar</button>
+      <button class="btn" type="submit" {{ 'disabled title="Resolva os bloqueios acima"' if bloqueios else '' }}>Confirmar &amp; Executar</button>
       <a href="{{ url_for('registros.incluir_dados', registro_id=registro.id)}}" target="_blank"
         rel="noopener noreferrer"></a>
     </form>

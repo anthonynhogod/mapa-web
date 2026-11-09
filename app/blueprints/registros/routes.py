@@ -21,6 +21,7 @@ from app.utils.format import normalize_str
 from markupsafe import escape
 from app.mapa_api.montagem import json_legivel, preparar_abate, usa_api
 from app.mapa_api.payloads import DadosIncompletos
+from app.logic.bloqueios import avaliar_credencial, motivos_pendencias, resumo_flash, uf_origem_index
 # >>> Service sem importar nada de 'routes':
 from app.executor.service import create_job_and_finalize
 
@@ -356,21 +357,24 @@ def preview_registro(registro_id):
     # (e o estabelecimento está completo), ou o dia não é válido.
     coletor = ColetorPendencias()
     avisos_api = []
+    cred, bloqueios = avaliar_credencial(registro.user_id, registro.especie)
+    uf_idx, aviso_uf = uf_origem_index(cred)
     if usa_api():
         prep = preparar_abate(registro, gta_records, dif_records, sif_records, coletor)
         comandos = [f"{prep['metodo']} /abate  (Content-Type: application/json)"] + json_legivel(prep["payload"])
         avisos_api = prep["avisos"]
     else:
         merged_diag = _merge_diagnostics(dif_records, sif_records)
-        estrutura_lotes = _build_legacy_structure_from_new(gta_records, merged_diag, uf_index_default=23)
+        estrutura_lotes = _build_legacy_structure_from_new(gta_records, merged_diag, uf_index_default=uf_idx)
         comandos = _build_commands(estrutura_lotes, coletor=coletor)
-
+        avisos_api = [aviso_uf] if aviso_uf else []
     if not coletor.vazio:
         return render_template(
             "registros/preview/pendencias.html",
             registro=registro,
             pendencias=coletor.listar(),
             gta_source=chosen_source,
+            bloqueios=bloqueios,
         )
 
     totais = {
@@ -392,6 +396,7 @@ def preview_registro(registro_id):
         diff=diff,  # sempre definido
         modo_api=usa_api(),
         avisos_api=avisos_api,
+        bloqueios=bloqueios,
     )
 
 
@@ -591,8 +596,23 @@ def finalizar_validacao(registro_id: int):
         flash("Já existe um job ativo para este registro.", "warning")
         return redirect(url_for("registros.prontos", registro_id=registro.id))
 
+    # VETO: refaz a checagem completa no servidor e lista TODOS os motivos (credencial + constantes)
+    from app.logic.constantes import ColetorPendencias, ConstanteNaoMapeada
+    cred, bloqueios = avaliar_credencial(registro.user_id, registro.especie)
+    coletor = ColetorPendencias()
+    if usa_api():
+        preparar_abate(registro, gta_records, dif_records, sif_records, coletor)
+    else:
+        _build_commands(
+            _build_legacy_structure_from_new(gta_records, _merge_diagnostics(dif_records, sif_records),
+                                             uf_index_default=uf_origem_index(cred)[0]),
+            coletor=coletor)
+    motivos = bloqueios + motivos_pendencias(coletor)
+    if motivos:
+        flash(resumo_flash("Lançamento vetado — nada foi enviado ao MAPA:", motivos), "danger")
+        return redirect(url_for("registros.preview_registro", registro_id=registro.id))
+
     # Cria ExecJob, seta PT, limpa tmp
-    from app.logic.constantes import ConstanteNaoMapeada
     try:
         job = create_job_and_finalize(
             registro=registro,

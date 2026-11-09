@@ -258,10 +258,9 @@ def force_stop_thread(worker_id):
     
     # Marca jobs como FALHOU
     from app.models import ExecJob
-    jobs_to_fail = ExecJob.query.filter(
-        ExecJob.status == "EXECUTANDO",
-        ExecJob.meta.contains({"worker_name": worker.name})
-    ).all()
+    # (filtra em Python: JSON.contains nao existe no SQLite)
+    jobs_to_fail = [j for j in ExecJob.query.filter(ExecJob.status == "EXECUTANDO").all()
+                    if (j.meta or {}).get("worker_name") == worker.name]
     for job in jobs_to_fail:
         job.status = "FALHOU"
         job.finished_at = datetime.utcnow()
@@ -298,23 +297,27 @@ def retry_job(job_id):
         flash(f"Job {job_id} não está em status FALHOU (atual: {job.status}).", "warning")
         return redirect(url_for('admin.threads'))
     
-    now = datetime.utcnow()
     limpar = request.form.get("limpar") == "1"
-    if limpar:
-        # Comercializacao: reprocessar limpando as transacoes do portal antes de relancar
-        # (o padrao e abortar se o registro do periodo ja tiver dados).
-        from app.logic.comercializacao import VERIFICAR_FN, para_limpar
-        cmds = list(job.commands or [])
-        if cmds and cmds[0].startswith(VERIFICAR_FN + "("):
-            cmds[0] = para_limpar(cmds[0])
-            job.commands = cmds
-        else:
-            flash(f"Job {job_id}: 'limpar portal' só vale para o modo navegador; ignorado.", "warning")
+    registro: Registro = db.session.get(Registro, job.registro_id)
+    if registro is None:
+        flash(f"Job {job_id}: o registro #{job.registro_id} não existe mais.", "danger")
+        return redirect(url_for('admin.threads'))
+    if limpar and not (registro.tipo == "comercializacao" and (job.meta or {}).get("backend") != "api"):
+        flash(f"Job {job_id}: 'limpar portal' só vale para comercialização no modo navegador; ignorado.", "warning")
+        limpar = False
+    # VETO no retry: refaz comandos/payload com o De->Para ATUAL; se algo estiver sem vinculo, nao reenfileira
+    from app.executor.service import Bloqueado, reconstruir_job
+    from app.logic.bloqueios import resumo_flash
+    try:
+        reconstruir_job(job, registro, limpar=limpar)
+    except Bloqueado as e:
+        db.session.rollback()
+        flash(resumo_flash(f"Job {job_id} NÃO foi reenfileirado:", e.motivos), "danger")
+        return redirect(url_for('admin.threads'))
     if (job.meta or {}).get("incerto"):
         flash(f"Job {job_id}: o resultado do envio anterior é DESCONHECIDO. Se o mapa já foi gravado no "
               "MAPA, o reenvio pode duplicá-lo (POST).", "warning")
     job.status = "ESPERA"
-    registro: Registro = db.session.get(Registro, job.registro_id)
     registro.status = "PT"
     job.progress = 0
     job.finished_at = None

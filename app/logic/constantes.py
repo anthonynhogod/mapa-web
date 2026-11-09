@@ -25,6 +25,30 @@ class ConstanteNaoMapeada(Exception):
         super().__init__(f"{tipo} sem vínculo cadastrado: {self.valor!r}")
 
 
+ROTULOS_PENDENCIA = {
+    "diagnostico": "Diagnóstico", "parte": "Parte afetada", "destino": "Destino",
+    "produto_venda": "Produto (vendas)", "estado_venda": "Estado (vendas)",
+    "diagnostico_api": "Diagnóstico sem ID da API", "parte_api": "Parte afetada sem ID da API",
+    "destino_api": "Destino sem ID da API", "produto_api": "Produto sem cod_produto da API",
+    "especie_api": "Espécie sem ID da API", "credencial": "Credenciais MAPA incompletas",
+}
+
+# Para cada tipo: o que aconteceu e onde resolver (mostrado ao operador no preview e no veto)
+COMO_RESOLVER = {
+    "diagnostico": "Não há diagnóstico do MAPA vinculado a este termo. Cadastre-o (ou inclua como apelido de um existente) em Admin › Constantes › Diagnósticos, ou corrija a planilha.",
+    "parte": "Parte afetada sem vínculo. Cadastre em Admin › Constantes › Partes afetadas (ou como apelido).",
+    "destino": "Destino sem vínculo. Cadastre em Admin › Constantes › Destinos (ou como apelido).",
+    "produto_venda": "Produto sem vínculo. Cadastre em Admin › Constantes › Produtos (vendas) com a descrição de busca e o ID do portal (ou como apelido de um existente).",
+    "estado_venda": "UF sem vínculo. Cadastre em Admin › Constantes › Estados (vendas) com o índice da UF no portal.",
+    "diagnostico_api": "O diagnóstico está cadastrado, mas sem ID da API. Informe em Admin › Constantes › Diagnósticos ou use Admin › API do MAPA › Sincronizar.",
+    "parte_api": "A parte está cadastrada, mas sem ID da API. Informe em Admin › Constantes › Partes afetadas ou sincronize em Admin › API do MAPA.",
+    "destino_api": "O destino está cadastrado, mas sem ID da API. Informe em Admin › Constantes › Destinos ou sincronize em Admin › API do MAPA.",
+    "produto_api": "O produto está cadastrado, mas sem cod_produto da API. Informe em Admin › Constantes › Produtos (vendas) ou sincronize em Admin › API do MAPA.",
+    "especie_api": "A espécie não tem ID da API. Informe em Admin › API do MAPA › Espécies.",
+    "credencial": "Complete o cadastro em Configurações › Credenciais MAPA.",
+}
+
+
 class ColetorPendencias:
     """
     Acumula tudo que não resolveu, em vez de estourar no primeiro erro.
@@ -53,10 +77,12 @@ class ColetorPendencias:
                  "produto_venda": 3, "estado_venda": 4,
                  "diagnostico_api": 5, "parte_api": 6, "destino_api": 7, "produto_api": 8,
                  "especie_api": 9, "credencial": 10}
-        return sorted(
+        itens = sorted(
             self._itens.values(),
             key=lambda i: (ordem.get(i["tipo"], 9), i["valor"].lower()),
         )
+        return [{**i, "rotulo": ROTULOS_PENDENCIA.get(i["tipo"], i["tipo"]),
+                 "como": COMO_RESOLVER.get(i["tipo"], "")} for i in itens]
 
     def __len__(self):
         return len(self._itens)

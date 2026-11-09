@@ -1,4 +1,5 @@
 # app/blueprints/processor/routes.py
+from markupsafe import escape
 from flask import Blueprint, request, redirect, url_for, flash, current_app, abort
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
@@ -108,7 +109,7 @@ def _handle_upload(*, registro_id: int, form, filetype: str, success_msg: str):
             return f"[{level}] {where}: {msg}"
 
         top_errors = "; ".join(_fmt_issue(e) for e in ve.errors[:5]) or "Erros de validação encontrados."
-        flash(f"Falha ao processar {filetype.upper()}: {top_errors}", "danger")
+        flash(escape(f"Falha ao processar {filetype.upper()}: {top_errors}"), "danger")
 
         # Se houver warnings, informe também (sem bloquear)
         if ve.warnings:
@@ -117,7 +118,7 @@ def _handle_upload(*, registro_id: int, form, filetype: str, success_msg: str):
     except Exception as e:
         current_app.logger.exception(f"Falha ao processar {filetype.upper()}")
         db.session.rollback()
-        flash(f"Falha ao processar {filetype.upper()}: {e}", "danger")
+        flash(escape(f"Falha ao processar {filetype.upper()}: {e}"), "danger")
     # fallback
     return redirect(url_for("registros.incluir_dados", registro_id=registro_id))
 
