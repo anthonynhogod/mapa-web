@@ -39,6 +39,19 @@
         </ul>
     </div>
 
+    <!-- Dropdown para Produção -->
+    <div class="dropdown">
+        <a class="item-menu dropdown-toggle" href="#">
+            <i class="fa fa-industry"></i>
+            <span>Produção</span>
+            <i class="fa fa-chevron-down arrow"></i>
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="sub-item" href="{{ url_for('producao.lista') }}">Registros</a></li>
+            <li><a class="sub-item" href="{{ url_for('producao.novo') }}">Nova planilha</a></li>
+        </ul>
+    </div>
+
     <!-- Dropdown para Lançamentos -->
     <div class="dropdown">
         <a class="item-menu dropdown-toggle" href="#">

@@ -89,6 +89,7 @@ def create_app():
     from .blueprints.api.routes import bp as api_bp
     from .blueprints.admin.routes import bp as admin_bp
     from .blueprints.comercializacao.routes import bp as comercializacao_bp
+    from .blueprints.producao.routes import bp as producao_bp
     from .blueprints.verificacao.routes import bp as verificacao_bp
     from .blueprints.api.auth import register_cli
 
@@ -98,6 +99,7 @@ def create_app():
     app.register_blueprint(registros_bp, url_prefix="/registros")
     app.register_blueprint(processor_bp, url_prefix="/processor")
     app.register_blueprint(comercializacao_bp, url_prefix="/comercializacao")
+    app.register_blueprint(producao_bp, url_prefix="/producao")
     app.register_blueprint(verificacao_bp, url_prefix="/verificacao")
     app.register_blueprint(api_bp, url_prefix="/api/v1/")
 

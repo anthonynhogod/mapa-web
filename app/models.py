@@ -159,8 +159,9 @@ class Registro(db.Model):
     obs = db.Column(db.String(256), nullable=True)
     recurso = db.Column(db.String(16), nullable=False, default="web")
 
-    # Modulo do lancamento: "abate" (padrao) ou "comercializacao".
+    # Modulo do lancamento: "abate" (padrao), "comercializacao" ou "producao".
     # Na comercializacao, `data` guarda o inicio do periodo e `periodo_fim` o fim.
+    # Na producao o periodo e o MES inteiro (periodo_ini = dia 1, periodo_fim = ultimo dia).
     tipo = db.Column(db.String(20), nullable=False, default="abate", server_default="abate", index=True)
     periodo_ini = db.Column(db.Date, nullable=True)
     periodo_fim = db.Column(db.Date, nullable=True)
@@ -225,15 +226,23 @@ class Registro(db.Model):
         return self.tipo == "comercializacao"
 
     @property
+    def is_producao(self) -> bool:
+        return self.tipo == "producao"
+
+    @property
     def tipo_label(self) -> str:
-        """Modulo para exibicao em listas: 'Abate' ou 'Comercialização (venda)'."""
+        """Modulo para exibicao em listas: 'Abate', 'Comercialização (venda)' ou 'Produção'."""
         if self.is_comercializacao:
             return f"Comercialização ({self.lancamento or 'venda'})"
+        if self.is_producao:
+            return "Produção"
         return "Abate"
 
     @property
     def periodo_label(self) -> str:
-        """Texto de exibicao: dia (abate) ou periodo (comercializacao)."""
+        """Texto de exibicao: dia (abate), periodo (comercializacao) ou mes/ano (producao)."""
+        if self.is_producao and self.periodo_ini:
+            return f"{self.periodo_ini:%m/%Y}"
         if self.is_comercializacao and self.periodo_ini and self.periodo_fim:
             return f"{self.periodo_ini:%d/%m/%Y} a {self.periodo_fim:%d/%m/%Y}"
         return f"{self.data:%d/%m/%Y}" if self.data else "-"
@@ -348,7 +357,7 @@ class SifTmp(_BaseTmp, db.Model):
     )
 
 class VendasTmp(_BaseTmp, db.Model):
-    """Planilha de vendas (comercializacao) validada, aguardando confirmacao."""
+    """Planilha validada aguardando confirmacao: vendas (comercializacao) ou producao (`model` = codigo do tipo)."""
     __tablename__ = "vendas_tmp"
 
     registro = relationship("Registro", back_populates="vendas_uploads")
@@ -615,6 +624,51 @@ class EstadoVendaAlias(db.Model):
     alias_norm = db.Column(db.String(60), nullable=False, unique=True, index=True)
 
     estado = relationship("EstadoVenda", back_populates="aliases")
+
+
+# =========================================================
+# PRODUCAO — regras "De -> Para" administraveis
+# =========================================================
+
+class ProdutoProducao(_ConstMixin, db.Model):
+    """
+    Produto como aparece na planilha de producao (De) e o que o portal precisa (Para):
+      - 'nome'           : grafia na planilha (ex.: 'APRESUNTADO RESFRIADO')
+      - 'descricao_busca': texto digitado no campo de busca do produto padronizado
+      - 'id_mapa'        : id do produto no portal (casa com o 'id=NNN' do data-rk da linha encontrada)
+    Produtos diferentes PODEM apontar para o mesmo id_mapa; no plano as quantidades sao somadas por id.
+    """
+    __tablename__ = "produto_producao"
+
+    nome = db.Column(db.String(160), nullable=False, unique=True)
+    descricao_busca = db.Column(db.String(180), nullable=False)
+    id_mapa = db.Column(db.Integer, nullable=True)
+
+    aliases = relationship(
+        "ProdutoProducaoAlias",
+        back_populates="produto",
+        cascade="all,delete-orphan",
+        lazy="selectin",
+    )
+
+    def __repr__(self):
+        return f"<ProdutoProducao id={self.id} {self.nome!r} -> {self.id_mapa}>"
+
+
+class ProdutoProducaoAlias(db.Model):
+    __tablename__ = "produto_producao_alias"
+
+    id = db.Column(db.Integer, primary_key=True)
+    produto_id = db.Column(
+        db.Integer,
+        db.ForeignKey("produto_producao.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    alias = db.Column(db.String(160), nullable=False)
+    alias_norm = db.Column(db.String(160), nullable=False, unique=True, index=True)
+
+    produto = relationship("ProdutoProducao", back_populates="aliases")
 
 
 class TipoLancamento(_ConstMixin, db.Model):

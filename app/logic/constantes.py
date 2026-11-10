@@ -20,7 +20,7 @@ class ConstanteNaoMapeada(Exception):
     """Levantada quando um termo não possui vínculo cadastrado."""
 
     def __init__(self, tipo: str, valor: str):
-        self.tipo = tipo            # 'diagnostico' | 'parte' | 'destino' | 'produto_venda' | 'estado_venda'
+        self.tipo = tipo            # 'diagnostico' | 'parte' | 'destino' | 'produto_venda' | 'estado_venda' | 'produto_producao'
         self.valor = (valor or "").strip()
         super().__init__(f"{tipo} sem vínculo cadastrado: {self.valor!r}")
 
@@ -28,6 +28,7 @@ class ConstanteNaoMapeada(Exception):
 ROTULOS_PENDENCIA = {
     "diagnostico": "Diagnóstico", "parte": "Parte afetada", "destino": "Destino",
     "produto_venda": "Produto (vendas)", "estado_venda": "Estado (vendas)",
+    "produto_producao": "Produto (produção)",
     "diagnostico_api": "Diagnóstico sem ID da API", "parte_api": "Parte afetada sem ID da API",
     "destino_api": "Destino sem ID da API", "produto_api": "Produto sem cod_produto da API",
     "especie_api": "Espécie sem ID da API", "credencial": "Credenciais MAPA incompletas",
@@ -40,6 +41,7 @@ COMO_RESOLVER = {
     "destino": "Destino sem vínculo. Cadastre em Admin › Constantes › Destinos (ou como apelido).",
     "produto_venda": "Produto sem vínculo. Cadastre em Admin › Constantes › Produtos (vendas) com a descrição de busca e o ID do portal (ou como apelido de um existente).",
     "estado_venda": "UF sem vínculo. Cadastre em Admin › Constantes › Estados (vendas) com o índice da UF no portal.",
+    "produto_producao": "Produto da produção sem vínculo. Cadastre em Admin › Constantes › Produtos (produção) com a descrição de busca e o ID do portal (ou como apelido de um existente).",
     "diagnostico_api": "O diagnóstico está cadastrado, mas sem ID da API. Informe em Admin › Constantes › Diagnósticos ou use Admin › API do MAPA › Sincronizar.",
     "parte_api": "A parte está cadastrada, mas sem ID da API. Informe em Admin › Constantes › Partes afetadas ou sincronize em Admin › API do MAPA.",
     "destino_api": "O destino está cadastrado, mas sem ID da API. Informe em Admin › Constantes › Destinos ou sincronize em Admin › API do MAPA.",
@@ -74,7 +76,7 @@ class ColetorPendencias:
     def listar(self):
         """Pendências ordenadas por tipo e depois por valor."""
         ordem = {"diagnostico": 0, "parte": 1, "destino": 2,
-                 "produto_venda": 3, "estado_venda": 4,
+                 "produto_venda": 3, "estado_venda": 4, "produto_producao": 3,
                  "diagnostico_api": 5, "parte_api": 6, "destino_api": 7, "produto_api": 8,
                  "especie_api": 9, "credencial": 10}
         itens = sorted(
@@ -94,7 +96,7 @@ class ColetorPendencias:
 
 _lock = RLock()
 _cache = {"diagnostico": None, "parte": None, "destino": None, "condena": None,
-          "produto_venda": None, "estado_venda": None,
+          "produto_venda": None, "estado_venda": None, "produto_producao": None,
           "diagnostico_api": None, "parte_api": None, "destino_api": None, "especie_api": None}
 
 
@@ -274,6 +276,40 @@ def resolve_produto_venda(nome: str, coletor: ColetorPendencias = None):
         coletor.registrar("produto_venda", nome)
         return None
     raise ConstanteNaoMapeada("produto_venda", nome)
+
+
+def _mapa_produtos_producao():
+    """{alias_norm: {"descricao": str, "id": int|None, "nome": str}} dos produtos de producao ativos."""
+    with _lock:
+        if _cache["produto_producao"] is None:
+            from app.models import ProdutoProducao, ProdutoProducaoAlias
+            from app.extensions import db
+
+            rows = (
+                db.session.query(
+                    ProdutoProducaoAlias.alias_norm,
+                    ProdutoProducao.descricao_busca, ProdutoProducao.id_mapa, ProdutoProducao.nome,
+                )
+                .join(ProdutoProducao, ProdutoProducaoAlias.produto_id == ProdutoProducao.id)
+                .filter(ProdutoProducao.ativo.is_(True))
+                .all()
+            )
+            _cache["produto_producao"] = {
+                norm: {"descricao": descr, "id": int(idm) if idm is not None else None, "nome": nome}
+                for norm, descr, idm, nome in rows
+            }
+        return _cache["produto_producao"]
+
+
+def resolve_produto_producao(nome: str, coletor: ColetorPendencias = None):
+    """Produto da planilha de producao -> {"descricao", "id", "nome"} do portal. Sem vinculo -> pendencia."""
+    valor = _mapa_produtos_producao().get(normalize_str(nome or ""))
+    if valor is not None:
+        return valor
+    if coletor is not None:
+        coletor.registrar("produto_producao", nome)
+        return None
+    raise ConstanteNaoMapeada("produto_producao", nome)
 
 
 def resolve_estado_venda(uf: str, coletor: ColetorPendencias = None):

@@ -34,6 +34,7 @@ from app.logic.js_literal import js_str
 LOGIN_URL = r"https://sistemas.agricultura.gov.br/segaut/login.jsp?sgAplicacaoRedirecionada=%2Fpga_sigsif"
 ABATE_HOME_URL = "https://sistemas.agricultura.gov.br/pga_sigsif/pages/view/sigsif/mapaabate/indexMapaAbate.xhtml"
 COMERCIALIZACAO_HOME_URL = "https://sistemas.agricultura.gov.br/pga_sigsif/pages/view/sigsif/mapacomercializacao/indexMapaComercializacao.xhtml"
+PRODUCAO_HOME_URL = "https://sistemas.agricultura.gov.br/pga_sigsif/pages/view/sigsif/mapaproducao/indexMapaProducao.xhtml"
 ABATE_URL_HINT = "/pga_sigsif/"
 SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts"))
 # comandos que tipicamente rendem mensagens na tela
@@ -869,3 +870,42 @@ class NavegadorComercializacao(Navegador):
                     raise
         except JavascriptException as e:
             raise FalhaNoJavascript(dia=getattr(self, "data", None), erro=e)
+
+
+class NavegadorProducao(Navegador):
+    """
+    Perfil do Mapa de Producao (mesmo portal/login, outra tela e outro script).
+
+    Diferente do abate/comercializacao, o login so autentica, abre a tela de consulta da producao e injeta os
+    scripts: o registro NASCE na tela de inclusao, pelos comandos do job (abrirInclusaoProducao ... finalizar).
+    """
+
+    HOME_URL = PRODUCAO_HOME_URL
+    # especifico do modulo: com o hint generico "/pga_sigsif/" o login nunca navegaria ate a producao
+    URL_HINT = "/mapaproducao/"
+    FORM_MARKER = "formConsultarMapaProducao"
+    MODULE_SCRIPT = "producao.js"
+    HELPER_FUNCS = ("collectUiMessages", "getMensagemErro", "abrirInclusaoProducao", "incluirProdutoProducao")
+    # o JS ja devolve "Erro: [CODIGO] ..."; coletar mensagens de UI por fora so geraria falso positivo
+    UI_TAP_COMMANDS = ()
+    TAP_ON_ERROR = False
+    RETRY_ONLY_TRANSIENT = True
+    WORKER_ATTEMPTS = 1
+
+    def login(self, competencia: str, usuario: str, senha: str, numero_sif: str = "167", **_ignorado):
+        """`competencia`: MM/AAAA (so identifica o job nos logs/erros)."""
+        self.data = competencia
+        self.numero_sif = str(numero_sif)
+        self._autenticar_com_retry(usuario, senha)
+        try:
+            self.get(self.HOME_URL)
+        except Exception as e:
+            raise FalhaNoJavascript(dia=competencia, erro=f"Erro: [NAVEGACAO] nao abri o mapa de producao: {e}")
+        ok_r, err_r = self._ensure_on_abate_home(timeout=20)
+        if not ok_r:
+            raise FalhaNoJavascript(dia=competencia, erro=f"Erro: [SEM_FORMULARIO] {err_r}")
+        try:
+            self.injetar_scripts()
+        except Exception as e:
+            print(f"[NavegadorProducao] Aviso: falha ao injetar scripts: {e}")
+        self._pf_flush(timeout_ms=2500)

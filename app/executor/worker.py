@@ -13,7 +13,7 @@ import socket
 import threading
 import time
 import datetime as dt
-from app.runner.web.navegador import Navegador, NavegadorComercializacao
+from app.runner.web.navegador import Navegador, NavegadorComercializacao, NavegadorProducao
 import traceback
 from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
@@ -229,7 +229,10 @@ class Worker:
 
                     especie = getattr(registro, "especie", None)
                     comercializacao = registro.tipo == "comercializacao"
-                    if comercializacao:
+                    producao = registro.tipo == "producao"
+                    if producao:
+                        dia_str = registro.periodo_ini.strftime("%m/%Y")
+                    elif comercializacao:
                         ini_str = registro.periodo_ini.strftime("%d/%m/%Y")
                         fim_str = registro.periodo_fim.strftime("%d/%m/%Y")
                         dia_str = f"{ini_str} a {fim_str}"
@@ -306,7 +309,12 @@ class Worker:
                             nav_speed = self.app.config.get("NAV_SPEED_PROFILE", "balanced")
                             nav_tap   = self.app.config.get("NAV_TAP_UI", "auto")
 
-                        if comercializacao:
+                        if producao:
+                            nav = NavegadorProducao(mode=nav_mode, speed_profile=nav_speed, tap_ui=nav_tap)
+                            _register_nav(nav)
+                            sif = (job.meta or {}).get("numero_sif") or cred.numero_sif
+                            nav.login(dia_str, cred.usuario_app, cred.senha, sif)
+                        elif comercializacao:
                             nav = NavegadorComercializacao(
                                 mode=nav_mode, speed_profile=nav_speed, tap_ui=nav_tap,
                             )

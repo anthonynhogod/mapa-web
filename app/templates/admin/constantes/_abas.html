@@ -24,4 +24,12 @@
       {{ aba('tipos-lancamento', 'Tipos de lançamento', url_for('admin.tipos_lancamento')) }}
     </div>
   </div>
+  <div class="cst-grupo">
+    <span class="cst-grupo__rotulo">Produção</span>
+    <div class="cst-grupo__abas">
+      {% for chave, s in secoes.items() if s.grupo == 'producao' %}
+        {{ aba(chave, s.label, url_for('admin.constantes_secao', secao=chave)) }}
+      {% endfor %}
+    </div>
+  </div>
 </nav>

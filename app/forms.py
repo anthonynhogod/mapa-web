@@ -45,6 +45,18 @@ class UploadVendasForm(FlaskForm):
     submit = SubmitField("Enviar planilha")
 
 
+class UploadProducaoForm(FlaskForm):
+    """Planilha de producao (mapa MENSAL). A competencia (MM/AAAA) e lida das colunas de dia;
+    o campo so e necessario quando a planilha nao a traz."""
+    file = FileField(
+        "Planilha",
+        validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")],
+    )
+    competencia = StringField("Competência (MM/AAAA)", validators=[Optional()])
+    obs = StringField("Observacoes", validators=[Optional()])
+    submit = SubmitField("Enviar planilha")
+
+
 class VerificacaoForm(FlaskForm):
     """Relatorio exportado do MAPA + a base de comparacao (registro ja lancado ou planilha de vendas)."""
     mapa = FileField("Relatório do MAPA", validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")])

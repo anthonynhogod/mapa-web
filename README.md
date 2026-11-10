@@ -1,17 +1,25 @@
 # MAPA Automation
 
-Automação de lançamentos no PGA-SIGSIF (MAPA), com dois módulos no mesmo sistema:
+Automação de lançamentos no PGA-SIGSIF (MAPA), com três módulos no mesmo sistema:
 
 | Módulo | Entrada | Lançamento |
 |---|---|---|
 | **Abate** | GTA + DIF + SIF (upload ou manual) | um dia de abate por registro |
 | **Comercialização** | planilha de vendas (`.xlsx`) | um período (mês) por registro, **por estado (UF)** |
+| **Produção** | planilha de produção (`.xlsx`, colunas PRODUTO e TOTAL) | um mês (MM/AAAA) por registro, **por produto** — só pelo navegador |
 
 Fluxo comum: upload → validação → preview (pendências de De→Para bloqueiam) → `ExecJob` → worker envia ao MAPA.
 
 **Execução (`EXEC_BACKEND`)**
 - `browser` (**padrão por enquanto**): Selenium + scripts JS no portal.
 - `api`: envio pelo **webservice REST do PGA-SIGSIF** (manual v1.3), sem navegador. Implementado e testado só contra um servidor simulado; **desligado** até o MAPA liberar o acesso do usuário/IP. O ambiente padrão é **homologação** (`MAPA_API_AMBIENTE=homologacao`); produção só com `producao` explícito.
+
+### Mapa de produção (só navegador)
+
+1. **Admin › Constantes › Produção › Produtos (produção)**: o De→Para é *produto da planilha* → *descrição de busca* (texto digitado na pesquisa de produto padronizado) + *ID do portal* (o `id=NNN` do `data-rk` da linha encontrada). Sem vínculo = pendência que bloqueia o preview. Não há carga inicial: cadastre conforme as pendências aparecem. Produtos da planilha que apontam para o **mesmo ID do portal** são somados em uma linha só (o preview mostra a origem de cada parcela).
+2. **Produção › Nova planilha**: usa só `PRODUTO` e `TOTAL`. O mês vem das **colunas de dia** com produção (o intervalo do título pode passar do mês); planilha com mais de um mês é recusada; a competência (`MM/AAAA`) pode ser informada à mão quando a planilha não tem colunas de dia.
+3. O job abre a inclusão no portal, preenche estabelecimento (nº do SIF da credencial), período e “Produção = Sim”, lança cada produto e só no último comando confere o nº de linhas e clica em *Confirmar*. **Nada fica gravado antes disso**: um job que falha no meio pode ser reexecutado do zero. O único passo sem volta é o *Adicionar* de cada produto — erro depois dele vira `[ADD_INCERTO]` e nunca é repetido sozinho.
+4. Ainda **não** há consulta/alteração de um mapa de produção já existente nem conferência com o relatório do MAPA: se o portal já tiver o mês, ele recusa o *Confirmar* e o job falha com a mensagem do portal, sem alterar nada.
 
 ### Webservice (modo `api`, desligado por padrão: `EXEC_BACKEND=api` para ligar)
 

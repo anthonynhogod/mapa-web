@@ -49,7 +49,7 @@
         {% for r in registros %}
         <tr>
             <td>{{ r.periodo_label }}</td>
-            <td>{{ r.tipo_label if r.is_comercializacao else r.especie }}</td>
+            <td>{{ r.tipo_label if (r.is_comercializacao or r.is_producao) else r.especie }}</td>
             <td>{{ r.obs or 'Sem Observações' }}</td>
             <td>{{ status_badge(r.status) }}</td>
         </tr>

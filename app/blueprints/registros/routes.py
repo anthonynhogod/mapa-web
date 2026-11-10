@@ -261,7 +261,7 @@ def excluir(registro_id):
         flash("Confirmação ausente. Exclusão cancelada.", "warning")
         return redirect(url_for("registros.prontos"))
 
-    voltar = "comercializacao.lista" if registro.tipo == "comercializacao" else "registros.prontos"
+    voltar = {"comercializacao": "comercializacao.lista", "producao": "producao.lista"}.get(registro.tipo, "registros.prontos")
     db.session.delete(registro)
     db.session.commit()
     flash("Registro excluído.", "success")

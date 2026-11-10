@@ -50,3 +50,39 @@ def xlsx_relatorio_mapa(linhas, *, antes=0, controle="167", extra=None):
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+def xlsx_producao(linhas, *, dias=("01/09/2026", "02/09/2026", "03/09/2026"), titulo=True, total_rodape=True,
+                  empresa="COOPERATIVA TESTE LTDA", intervalo="01/09/2026 até 04/11/2026"):
+    """Planilha no layout 'Relatório Inspeção Federal - Produção'.
+
+    `linhas`: (produto, codigo, [quantidade por dia...], total|None). total=None => soma dos dias.
+    """
+    wb = Workbook()
+    ws = wb.active
+    if titulo:
+        ws.append([empresa])
+        ws.append([])
+        ws.append([f"Relatório Inspeção Federal - Produção - {intervalo}"])
+        ws.append([])
+    ws.append(["PRODUTO", "CÓDIGO"] + [f"{244 + i}/26 {d}" for i, d in enumerate(dias)] + ["TOTAL"])
+    soma = [0.0] * len(dias)
+    for produto, codigo, qtds, total in linhas:
+        qtds = list(qtds) + [None] * (len(dias) - len(qtds))
+        t = sum(q for q in qtds if q) if total is None else total
+        ws.append([produto, codigo] + qtds + [t])
+        soma = [s + (q or 0) for s, q in zip(soma, qtds)]
+    if total_rodape:
+        ws.append(["TOTAL", None] + soma + [sum(soma)])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+LINHAS_PRODUCAO = [
+    ("APRESUNTADO RESFRIADO", "00301", [100.5, 200, None], None),
+    ("BACON", "00303", [10, None, 5.255], None),
+    ("BACON RESFRIADO FATIADO", "00304", [None, None, 7], None),
+    ("SEM MOVIMENTO", "00999", [None, None, None], 0),
+]

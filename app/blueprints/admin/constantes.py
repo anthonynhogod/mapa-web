@@ -16,6 +16,7 @@ from app.models import (
     CondenaParte,
     ProdutoVenda, ProdutoVendaAlias,
     EstadoVenda, EstadoVendaAlias,
+    ProdutoProducao, ProdutoProducaoAlias,
     TipoLancamento,
 )
 from app.security import admin_required
@@ -109,6 +110,26 @@ SECOES = {
         "rotulo_id_mapa": "Índice da UF no select do portal (Para)",
         "ajuda_id_mapa": "Posição da opção no select de UF (0 = placeholder; AC = 1 ... TO = 27).",
         "extras": [],
+    },
+    # ---- Producao (De -> Para dos produtos da planilha de producao) ----
+    "produtos-producao": {
+        "label": "Produtos (produção)",
+        "model": ProdutoProducao,
+        "alias_model": ProdutoProducaoAlias,
+        "alias_fk": "produto_id",
+        "campo_nome": "nome",
+        "tem_id_mapa": True,
+        "cache": "produto_producao",
+        "singular": "Produto de produção",
+        "grupo": "producao",
+        "rotulo_nome": "Produto na planilha (De)",
+        "rotulo_id_mapa": "ID do produto no portal (Para)",
+        "rotulo_id_mapa_curto": "ID portal",
+        "ajuda_id_mapa": "Casa com o id=NNN (data-rk) da linha do produto padronizado na busca do portal.",
+        "extras": [
+            {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal", "rotulo_curto": "Busca no portal",
+             "ajuda": "Texto digitado no campo “Produto” da pesquisa de produto padronizado."},
+        ],
     },
 }
 

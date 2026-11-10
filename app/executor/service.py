@@ -118,6 +118,28 @@ def reconstruir_job(job: ExecJob, registro, *, limpar: bool = False) -> None:
     coletor = ColetorPendencias()
     cred, motivos = avaliar_credencial(job.owner_user_id, registro.especie)
 
+    if registro.tipo == "producao":
+        # sempre pelo navegador (o webservice nao cobre a producao); o De->Para e reavaliado agora
+        from app.logic.producao import build_commands as prod_cmds, build_plano as prod_plano, totais as prod_totais
+        from app.models import VendasTmp
+        tmp = VendasTmp.query.filter_by(registro_id=registro.id).one_or_none()
+        records = ((tmp.payload or {}).get("records") if tmp else None) or []
+        if not records:
+            motivos.append("Os dados da planilha deste registro não existem mais: envie a planilha de novo.")
+            raise Bloqueado(motivos + motivos_pendencias(coletor))
+        plano = prod_plano(records, coletor)
+        if not plano and coletor.vazio:
+            motivos.append("Nenhum produto com quantidade maior que zero para lançar.")
+        motivos += motivos_pendencias(coletor)
+        if motivos:
+            raise Bloqueado(motivos)
+        sif = meta.get("numero_sif") or (cred.numero_sif if cred else "")
+        competencia = registro.periodo_ini.strftime("%m/%Y")
+        job.commands = prod_cmds(plano, competencia=competencia, numero_sif=sif)
+        meta["totais"] = prod_totais(plano)
+        meta["plano"] = plano
+        job.meta = meta
+        return
     if registro.tipo == "comercializacao":
         from app.logic.comercializacao import build_commands as com_cmds, build_plano, rotulos_ativos, tipo_config, totais
         from app.mapa_api.montagem import preparar_comercializacao

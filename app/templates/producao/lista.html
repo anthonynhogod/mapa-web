@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% from "_macros/status.html" import status_badge %}
+{% block title %}Produção — Registros{% endblock %}
+{% block content %}
+{% block mini_painel %}
+{% endblock %}
+<div class="page-head">
+  <h2 class="titulo-form">Registros de Produção</h2>
+  <a class="btn" href="{{ url_for('producao.novo') }}">Nova planilha</a>
+</div>
+
+{% if registros %}
+<div class="table-scroll"><table class="tabela-registros">
+  <thead>
+    <tr><th>Competência</th><th>Observações</th><th>Status</th><th>Ações</th></tr>
+  </thead>
+  <tbody>
+    {% for r in registros %}
+    <tr>
+      <td>{{ r.periodo_label }}</td>
+      <td>{{ r.obs or 'Sem Observações' }}</td>
+      <td>{{ status_badge(r.status) }}</td>
+      <td class="acoes">
+        {% if r.status == "AT" %}
+        <a href="{{ url_for('producao.preview', registro_id=r.id) }}" class="btn btn--sm btn--outline">Preview / Executar</a>
+        {% endif %}
+        <button type="button" class="btn btn--sm btn--danger" data-url="{{ url_for('registros.excluir', registro_id=r.id) }}"
+          data-descricao="a produção de {{ r.periodo_label }}" onclick="confirmarExclusao(this)">Excluir</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+<div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+{% else %}
+<p>Nenhum registro de produção. <a href="{{ url_for('producao.novo') }}">Envie uma planilha</a>.</p>
+{% endif %}
+{% endblock %}

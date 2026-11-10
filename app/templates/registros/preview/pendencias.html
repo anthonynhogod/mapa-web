@@ -53,7 +53,7 @@
             {% set secoes_por_tipo = {'diagnostico': 'diagnosticos', 'parte': 'partes', 'destino': 'destinos',
                                       'produto_venda': 'produtos-venda', 'estado_venda': 'estados-venda',
                                       'diagnostico_api': 'diagnosticos', 'parte_api': 'partes', 'destino_api': 'destinos',
-                                      'produto_api': 'produtos-venda'} %}
+                                      'produto_api': 'produtos-venda', 'produto_producao': 'produtos-producao'} %}
             {% set secao = secoes_por_tipo.get(p.tipo, 'diagnosticos') %}
             {% if p.tipo == 'especie_api' %}
             <a class="btn btn--outline btn--table" href="{{ url_for('admin.api_mapa') }}">Informar ID</a>

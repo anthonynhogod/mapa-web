@@ -111,6 +111,7 @@ def audits():
 # ---------------------------------------------------------------------------
 # Threads: dados exibidos (pagina e atualizacao automatica usam os mesmos parciais)
 # ---------------------------------------------------------------------------
+MODULOS = {"comercializacao": "Comercialização", "producao": "Produção"}   # demais = Abate
 FILTROS_JOBS = [("abertos", "Em aberto"), ("falhos", "Falhos"), ("todos", "Todos (últimos 100)")]
 
 
@@ -146,7 +147,7 @@ def _jobs_view(filtro="abertos", limite=100):
         pct = 100 if j.status == "SUCESSO" else (int(100 * (j.progress or 0) / total) if total else 0)
         out.append({
             "id": j.id, "status": j.status, "pct": pct, "backend": backend,
-            "modulo": "Comercialização" if meta.get("modulo") == "comercializacao" else "Abate",
+            "modulo": MODULOS.get(meta.get("modulo"), "Abate"),
             "lancamento": meta.get("lancamento"),
             "registro_id": j.registro_id, "periodo": reg.periodo_label if reg else "registro removido",
             "usuario": nomes.get(j.owner_user_id, "?"),
@@ -170,7 +171,7 @@ def _registros_sem_job():
     from app.models import Registro
     linhas = (db.session.query(Registro.tipo, db.func.count(Registro.id))
               .filter(Registro.status == "AT", ~Registro.exec_jobs.any()).group_by(Registro.tipo).all())
-    return {("Comercialização" if t == "comercializacao" else "Abate"): n for t, n in linhas}
+    return {MODULOS.get(t, "Abate"): n for t, n in linhas}
 
 
 @bp.route("/driver/verificar", methods=["POST"])
