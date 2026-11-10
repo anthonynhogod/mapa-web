@@ -22,13 +22,14 @@ FINALIZAR_CMD = "finalizarRegistroProducao"
 
 def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendencias] = None) -> List[Dict[str, Any]]:
     """
-    [{"id", "descricao", "quantidade", "produtos": [{"produto", "quantidade"}]}]  (um item por produto do portal)
+    [{"produto", "id", "descricao", "quantidade"}]  (um item por produto da planilha, ordenado por produto)
 
-    Produtos da planilha que apontam para o MESMO id do portal viram UMA linha (quantidades somadas): evita
-    lancar o mesmo produto padronizado duas vezes no mapa. `produtos` guarda a origem de cada parcela.
+    Cada produto da planilha e um lancamento UNICO no portal, mesmo quando varios apontam para o mesmo id
+    (ex.: "MIUDOS SALGADOS" e "MIUDOS SALGADOS (MASCARA)"): o Ministerio exige lancamentos separados, entao
+    NUNCA se somam quantidades por id. (A planilha ja soma linhas repetidas do MESMO produto.)
     Termo sem vinculo (ou vinculo sem id do portal) vira pendencia (com coletor) ou ConstanteNaoMapeada.
     """
-    por_id: Dict[int, Dict[str, Any]] = {}
+    itens: List[Dict[str, Any]] = []
     for r in sorted(records or [], key=lambda r: normalize_str(str(r.get("produto", "")))):
         prod = resolve_produto_producao(r.get("produto", ""), coletor)
         if prod is None:
@@ -41,12 +42,8 @@ def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendenci
         qtd = round(float(r.get("quantidade") or 0), 2)
         if qtd <= 0:
             continue
-        item = por_id.setdefault(prod["id"], {
-            "id": prod["id"], "descricao": prod["descricao"], "quantidade": 0.0, "produtos": [],
-        })
-        item["quantidade"] = round(item["quantidade"] + qtd, 2)
-        item["produtos"].append({"produto": r.get("produto"), "quantidade": qtd})
-    return sorted(por_id.values(), key=lambda i: (normalize_str(i["descricao"]), i["id"]))
+        itens.append({"produto": r.get("produto"), "id": prod["id"], "descricao": prod["descricao"], "quantidade": qtd})
+    return itens
 
 
 def build_commands(plano: List[Dict[str, Any]], *, competencia: str, numero_sif: str) -> List[str]:
@@ -64,6 +61,5 @@ def build_commands(plano: List[Dict[str, Any]], *, competencia: str, numero_sif:
 def totais(plano: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {
         "itens": len(plano),
-        "produtos": sum(len(i["produtos"]) for i in plano),
         "quantidade": round(sum(i["quantidade"] for i in plano), 2),
     }

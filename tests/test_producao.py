@@ -59,15 +59,21 @@ def test_plano_resolve_de_para_e_gera_comandos(app):
         'incluirProdutoProducao("BACON", 17189, 15.26)',
         'finalizarRegistroProducao("09/2026", 2)',
     ]
-    assert totais(plano) == {"itens": 2, "produtos": 2, "quantidade": 315.76}
+    assert totais(plano) == {"itens": 2, "quantidade": 315.76}
 
 
-def test_produtos_com_o_mesmo_id_do_portal_sao_somados(app):
-    _produto("BACON", "BACON", 17189)
-    _produto("BACON DEFUMADO", "BACON", 17189, "bacon defumado fatiado")
-    plano = build_plano([{"produto": "BACON", "quantidade": 10.1}, {"produto": "bacon defumado fatiado", "quantidade": 0.25}])
-    assert len(plano) == 1 and plano[0]["quantidade"] == 10.35
-    assert [p["produto"] for p in plano[0]["produtos"]] == ["BACON", "bacon defumado fatiado"]
+def test_produtos_com_o_mesmo_id_do_portal_continuam_lancamentos_separados(app):
+    """O Ministerio exige um lancamento por produto, mesmo com a mesma descricao e o mesmo id."""
+    _produto("MIUDOS SALGADOS", "MIUDOS SALGADOS", 18321)
+    _produto("MIUDOS SALGADOS (MASCARA)", "MIUDOS SALGADOS", 18321)
+    plano = build_plano([{"produto": "MIUDOS SALGADOS (MASCARA)", "quantidade": 0.25}, {"produto": "MIUDOS SALGADOS", "quantidade": 10.1}])
+    assert [(i["produto"], i["id"], i["quantidade"]) for i in plano] == [
+        ("MIUDOS SALGADOS", 18321, 10.1), ("MIUDOS SALGADOS (MASCARA)", 18321, 0.25)]
+    cmds = build_commands(plano, competencia="09/2026", numero_sif="167")
+    assert cmds[1:3] == ['incluirProdutoProducao("MIUDOS SALGADOS", 18321, 10.1)',
+                         'incluirProdutoProducao("MIUDOS SALGADOS", 18321, 0.25)']
+    assert cmds[-1] == 'finalizarRegistroProducao("09/2026", 2)'
+    assert totais(plano) == {"itens": 2, "quantidade": 10.35}
 
 
 def test_sem_vinculo_vira_pendencia_e_sem_coletor_levanta(app):

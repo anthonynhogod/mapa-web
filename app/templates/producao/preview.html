@@ -56,8 +56,7 @@
           <tbody>
             {% for i in plano %}
             <tr>
-              <td>{% for p in i.produtos %}{{ p.produto }}{% if i.produtos|length > 1 %} ({{ '%.2f'|format(p.quantidade) }}){% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
-                {% if i.produtos|length > 1 %}<br><small class="muted">somados: vão para o mesmo produto do portal</small>{% endif %}</td>
+              <td>{{ i.produto }}</td>
               <td>{{ i.descricao }}</td>
               <td>{{ i.id }}</td>
               <td>{{ '%.2f'|format(i.quantidade) }}</td>

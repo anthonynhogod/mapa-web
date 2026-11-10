@@ -117,6 +117,16 @@ def test_produto_nao_encontrado_fecha_dialogos_e_o_proximo_funciona(browser):
     assert estado(page)["produtos"] == [{"id": 17189, "qtd": 2}]
 
 
+def test_mesmo_produto_do_portal_duas_vezes_sao_duas_linhas(browser):
+    """Ex.: 'MIUDOS SALGADOS' e 'MIUDOS SALGADOS (MASCARA)' -> mesmo id, lancamentos separados."""
+    page = abrir(browser)
+    abrir_inclusao(page)
+    assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 2)').startswith("OK")
+    assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 3.5)').startswith("OK")
+    assert rodar(page, 'finalizarRegistroProducao("09/2026", 2)').startswith("OK")
+    assert estado(page)["saved"]["produtos"] == [{"id": 17189, "qtd": 2}, {"id": 17189, "qtd": 3.5}]
+
+
 def test_busca_sem_resultado(browser):
     page = abrir(browser)
     abrir_inclusao(page)
