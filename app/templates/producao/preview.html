@@ -21,8 +21,9 @@
     <div class="alert__content">
       Arquivo: <strong>{{ tmp.filename }}</strong>
       {% if meta.empresa %}— {{ meta.empresa }}{% endif %}.
-      O mapa de produção de <strong>{{ competencia }}</strong> é criado no portal e só é salvo no último passo;
-      se o portal já tiver um mapa desse mês, ele recusa o salvamento e o job falha sem alterar nada.
+      O mapa de produção de <strong>{{ competencia }}</strong> é criado no portal e só é salvo no último passo.
+      Este módulo ainda <strong>não consulta</strong> se o portal já tem um mapa desse mês: confira antes de confirmar.
+      Espera-se que o portal recuse o salvamento duplicado, mas isso ainda não foi verificado.
       {% if meta.competencia and meta.competencia.origem %}Mês obtido das {{ meta.competencia.origem }}.{% endif %}
       {% for w in meta.warnings %}
       <div class="msg-erro" style="margin-top:6px;">Aviso: {{ w.where }} — {{ w.message }}</div>

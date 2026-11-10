@@ -11,7 +11,7 @@
      ?ids=legacy -> ids "j_idt..." iguais aos do portal; ?ids=random -> numeros trocados.
      ?page=N linhas por pagina do mapa; ?rpage=N linhas por pagina da busca de produto;
      ?menu=0 -> o item do select de Producao nao responde ao clique (forca o fallback do <select>);
-     ?add=timeout -> o servidor nunca responde ao "Adicionar" produto; ?semsif=1 -> pesquisa de estabelecimento vazia. -->
+     ?bind=nunca -> o botao Incluir das buscas nunca habilita; ?add=timeout -> o servidor nunca responde ao "Adicionar" produto; ?semsif=1 -> pesquisa de estabelecimento vazia. -->
 <div id="mensagensValidacao"><div class="ui-messages"></div></div>
 <div id="outContent"></div>
 <div id="dialogs"></div>
@@ -163,8 +163,13 @@ function buildDialogs() {
       onclick="PrimeFaces.ab({s:&quot;${eb}&quot;,u:&quot;${P.emp}:frmDialog:msgDialog&quot;,onco:function(xhr,status,args){PF('dialogPesquisarRegistro').hide();}});return false;">incluir</button>
   </form></div>`;
 }
-function habilitar(btnSel) {            // o "rowSelect" do radio (ajax) habilita o botao de confirmar
-  setTimeout(() => { const b = document.querySelector(btnSel); b.disabled = false; b.classList.remove('ui-state-disabled'); }, 25);
+function habilitar(btnSel) {            // o "rowSelect" do radio (ajax) habilita o botao de confirmar...
+  if (Q.get('bind') === 'nunca') return;  // ?bind=nunca: o botao nunca habilita (testa o fallback pelo ajax direto)
+  setTimeout(() => {                    // ...RE-RENDERIZANDO-O (@(.commandBindSelector)): o no antigo continua desabilitado
+    const b = document.querySelector(btnSel), n = b.cloneNode(true);
+    n.disabled = false; n.removeAttribute('disabled'); n.classList.remove('ui-state-disabled');
+    b.replaceWith(n);
+  }, 400);                              // depois de o ajax ocioso: so quem re-resolve o botao enxerga o novo no
 }
 function selProduto(id) { S.sel = id; habilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`); }
 function selEmpresa(n) { S.empSel = n; habilitar(`[id^="${P.emp}:frmDialog"][id*="commandDialogBind_"]`); }

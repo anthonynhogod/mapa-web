@@ -114,6 +114,25 @@
     await esperarAjax(max);
   }
 
+  // Confirma a seleção de um diálogo de busca ("Incluir"). O botão nasce desabilitado e só habilita depois do ajax do
+  // radio, que pode SUBSTITUIR o nó (@(.commandBindSelector)): por isso ele é re-resolvido a cada checagem, nunca guardado.
+  // Se não habilitar a tempo, aciona o PrimeFaces.ab direto (o caminho que a comercialização sempre usou); se a seleção
+  // não tiver chegado ao servidor, o passo seguinte devolve a mensagem do próprio portal.
+  async function confirmarSelecao(form, parte, legacyId, pfCfg, rotulo) {
+    const achar = () => S.findEl({ id: legacyId, css: `[id^="${esc(form)}:"][id*="${parte}"]` });
+    let btn = null;
+    try {
+      btn = await S.waitFor(() => { const b = achar(); return habilitado(b) ? b : null; },
+        { timeout: 6000, label: `botão ${rotulo} habilitado` });
+    } catch (_) { btn = null; }
+    if (btn) { await clicar(btn); return; }
+    const alvo = achar();
+    if (!alvo) throw new Error(`[TIMEOUT] botão ${rotulo} (${parte}) não encontrado em ${form}`);
+    S.dbg(`${rotulo}: botão continuou desabilitado; acionando o ajax direto`);
+    await S.pf(Object.assign({ s: alvo.id }, pfCfg), `confirmar:${rotulo}`);
+    await esperarAjax();
+  }
+
   function setValor(el, v) {
     el.value = v;
     S.fireInput(el);
@@ -151,13 +170,8 @@
     await S.selectRadio("ui-radiobutton-box");
     await esperarAjax();
 
-    const bind = await botaoDoForm(fEmp, ":commandDialogBind_", LEG.vinculaRegistro);
-    try { await S.waitFor(() => habilitado(bind), { timeout: 6000, label: "botão Incluir do estabelecimento habilitado" }); }
-    catch (_) {
-      S.closeDialogs([W.registro]);
-      return "Erro: [ESTABELECIMENTO_NAO_SELECIONADO] o botão de inclusão continuou desabilitado depois de selecionar o estabelecimento.";
-    }
-    await clicar(bind);
+    await confirmarSelecao(fEmp, ":commandDialogBind_", LEG.vinculaRegistro,
+      { u: `${fEmp}:msgDialog @(.dialogPesquisarRegistroSelector)` }, "Incluir do estabelecimento");
     await aguardarDialogo(W.registro, false);
     await S.waitFor(() => { const c = campoRegistro(); return c && c.value.trim(); },
       { timeout: 8000, label: "estabelecimento preenchido no formulário" });
@@ -316,13 +330,8 @@
           `(termo digitado: "${descricao}"; ${vistos.length} resultado(s) na página atual${vistos.length ? ": ids " + vistos.slice(0, 8).join(", ") : ""}).`;
       }
       await esperarAjax();
-      const bind = await botaoDoForm(fQry, ":commandDialogBind_", LEG.vinculaProduto);
-      try { await S.waitFor(() => habilitado(bind), { timeout: 6000, label: "botão Incluir do produto habilitado" }); }
-      catch (_) {
-        S.closeDialogs(DIALOGOS);
-        return `Erro: [PRODUTO_NAO_SELECIONADO] o botão de confirmação continuou desabilitado depois de selecionar o id=${idProduto}.`;
-      }
-      await clicar(bind);
+      await confirmarSelecao(fQry, ":commandDialogBind_", LEG.vinculaProduto,
+        { u: `${fQry}:msgDialog @(.dialogPesquisarProdutoPadronizadoSelector)` }, "Incluir do produto");
       await aguardarDialogo(W.busca, false);
 
       // 5) quantidade (campo numérico: o valor enviado é o do _hinput, em decimal com ponto) e Adicionar

@@ -142,6 +142,22 @@ def test_timeout_no_adicionar_vira_add_incerto_sem_marca_transitoria(browser):
     assert "[TIMEOUT]" not in r and "reexecute o job" in r
 
 
+def test_botao_incluir_re_renderizado_apos_a_selecao_e_re_resolvido(browser):
+    """O ajax do radio substitui o botao 'Incluir' (o no antigo fica desabilitado para sempre): o script nao pode guardar o no."""
+    page = abrir(browser)
+    assert abrir_inclusao(page).startswith("OK")
+    assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 2)').startswith("OK")
+    assert estado(page)["produtos"] == [{"id": 17189, "qtd": 2}]
+
+
+def test_botao_incluir_que_nunca_habilita_cai_no_ajax_direto(browser):
+    page = abrir(browser, "ids=legacy&bind=nunca")
+    assert abrir_inclusao(page).startswith("OK")
+    assert estado(page)["estab"] == "167"
+    assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 2)').startswith("OK")
+    assert estado(page)["produtos"] == [{"id": 17189, "qtd": 2}]
+
+
 def test_estabelecimento_nao_encontrado(browser):
     page = abrir(browser)
     r = abrir_inclusao(page, sif="000")
