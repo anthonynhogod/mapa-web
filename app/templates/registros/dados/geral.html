@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+{% block title %}Novo Registro{% endblock %}
+
+{% block main %}
+<div class="painel">
+
+    {% macro badge_ready(is_ready, has_temp=False) -%}
+    <span class="badge {{ 'bg-success' if is_ready else 'bg-secondary' }}" style="vertical-align: middle;">
+        {{ 'Pronto' if is_ready else 'Pendente' }}
+    </span>
+    {# Se existe arquivo temporário mas ainda não está pronto, mostra indicativo #}
+    {% if (has_temp and not is_ready) %}
+    <span class="badge bg-info text-dark" style="vertical-align: middle;">Arquivo enviado</span>
+    {% endif %}
+    {%- endmacro %}
+
+    <h1 class="titulo-form">Incluir dados no Registro</h1>
+
+    <div class="dados-grid">
+        <div class="card-registro">
+            <p><strong>ID:</strong> {{ registro.id }}</p>
+            <p><strong>Status:</strong> {{ registro.status }}</p>
+            <p><strong>Espécie:</strong> {{ registro.especie }}</p>
+        </div>
+
+        <div class="form-completo">
+            <div class="tabs">
+                <button class="tab-btn blue active" data-tab="gta">GTAs</button>
+                <button class="tab-btn blue" data-tab="dif">DIF</button>
+                <button class="tab-btn blue" data-tab="sif">SIF</button>
+            </div>
+
+            <div class="tab-pane active" id="gta">
+                <h2 class="sub-titulo-form">Dados GTAs</h2>
+                <form enctype="multipart/form-data" id="form-gta" data-has-temp="{{ 1 if gta_has_temp else 0 }}"
+                    action="{{ url_for('processor.upload_gta', registro_id=registro.id) }}" method="post">
+                    {{gta_form.csrf_token }}
+
+                    <div class="form-input">
+                        <label for="gta-file" class="form-label">Arquivo GTA:</label>
+                        <div class="file-custom" data-allowed=".xlsx,.csv,.txt" data-max="10485760">
+                            {{ gta_form.file(id="gta-file", class="file-input", accept=".xlsx,.csv,.txt") }}
+                            <label class="file-label btn btn--outline" for="gta-file">
+                                <span>Selecionar</span>
+                            </label>
+                            <span class="file-name" id="gta-file-name" hidden>—</span>
+                            <div class="msg-erro" data-error hidden></div>
+                        </div>
+                    </div>
+
+                    <div class="form-input">
+                        {{ gta_form.model.label(class="form-label") }}
+                        {{ gta_form.model(class="form-control") }}
+                    </div>
+
+                    <div class="form-actions">
+                        
+                        {% if gta_has_temp %}
+                        <div class="form-actions" style="justify-content:flex-start; gap:8px;">
+                            <a class="btn btn-primary" href="{{ url_for('registros.preview_gta', registro_id=registro.id) }}" data-no-loader="true">
+                                Preview GTA
+                            </a>
+                        </div>
+                        {% endif %}
+
+                        {{ gta_form.submit(class="btn", value="Enviar GTA") }}
+
+                        <a class="btn btn-secondary"
+                            href="{{ url_for('registros.incluir_gta', registro_id=registro.id) }}">Registrar
+                            manualmente</a>
+                    </div>
+                </form>
+            </div>
+
+            <div class="tab-pane" id="dif">
+                <h2 class="sub-titulo-form">Dados DIF</h2>
+                <form method="POST" enctype="multipart/form-data" id="form-dif"
+                    data-has-temp="{{ 1 if dif_has_temp else 0 }}"
+                    action="{{ url_for('processor.upload_dif', registro_id=registro.id) }}">
+                    {{ dif_form.csrf_token }}
+                    <div class="form-input">
+                        <label for="dif-file" class="form-label">Arquivo DIF:</label>
+                        <div class="file-custom" data-allowed=".xlsx,.csv,.txt" data-max="10485760">
+                            {{ dif_form.file(id="dif-file", class="file-input", accept=".xlsx,.csv,.txt") }}
+                            <label class="file-label btn btn--outline" for="dif-file">
+                                <span>Selecionar</span>
+                            </label>
+                            <span class="file-name" id="dif-file-name" hidden>—</span>
+                            <div class="msg-erro" data-error hidden></div>
+                        </div>
+                    </div>
+                    <div class="form-input">
+                        {{ dif_form.model.label(class="form-label") }}
+                        {{ dif_form.model(class="form-control") }}
+                    </div>
+
+                    <div class="form-actions">
+                        {% if dif_has_temp %}
+                        <div class="form-actions" style="justify-content:flex-start; gap:8px;">
+                            <a class="btn btn-primary" href="{{ url_for('registros.preview_dif', registro_id=registro.id) }}" data-no-loader="true">
+                            Preview DIF
+                            </a>
+                        </div>
+                        {% endif %}
+                        {{ dif_form.submit(class="btn", value="Enviar DIF") }}
+                    </div>
+                </form>
+            </div>
+
+            <div class="tab-pane" id="sif">
+                <h2 class="sub-titulo-form">Dados SIF</h2>
+                <form method="POST" enctype="multipart/form-data" id="form-sif"
+                    data-has-temp="{{ 1 if sif_has_temp else 0 }}"
+                    action="{{ url_for('processor.upload_sif', registro_id=registro.id) }}">
+                    {{ sif_form.csrf_token }}
+                    <div class="form-input">
+                        <label for="sif-file" class="form-label">Arquivo SIF:</label>
+                        <div class="file-custom" data-allowed=".xlsx,.csv,.txt" data-max="10485760">
+                            {{ sif_form.file(id="sif-file", class="file-input", accept=".xlsx,.csv,.txt") }}
+                            <label class="file-label btn btn--outline" for="sif-file">
+                                <span>Selecionar</span>
+                            </label>
+                            <span class="file-name" id="sif-file-name" hidden>—</span>
+                            <div class="msg-erro" data-error hidden></div>
+                        </div>
+                    </div>
+                    <div class="form-input">
+                        {{ sif_form.model.label(class="form-label") }}
+                        {{ sif_form.model(class="form-control") }}
+                    </div>
+                    <div class="form-actions">
+                        {% if sif_has_temp %}
+                        <div class="form-actions" style="justify-content:flex-start; gap:8px;">
+                            <a class="btn btn-primary" href="{{ url_for('registros.preview_sif', registro_id=registro.id) }}" data-no-loader="true">
+                            Preview SIF
+                            </a>
+                        </div>
+                        {% endif %}
+                        {{ sif_form.submit(class="btn", value="Enviar SIF") }}
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="form-actions" style="margin-top: var(--space-6);">
+        {% if can_validate %}
+        <a href="{{ url_for('registros.preview_registro', registro_id=registro.id)}}" class="btn btn-primary">Validar
+            dia</a>
+        {% endif %}
+        <a class="btn btn-primary" href="{{ url_for('registros.prontos')}}">Voltar</a>
+    </div>
+</div>
+{% endblock %}
+{% block script %}
+
+<script>
+    (function () {
+        // Tabs
+        const tabs = document.querySelectorAll('.tab-btn');
+        const panes = document.querySelectorAll('.tab-pane');
+        tabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.dataset.tab;
+                tabs.forEach(b => b.classList.toggle('active', b === btn));
+                panes.forEach(p => p.classList.toggle('active', p.id === id));
+            });
+        });
+
+        // File validation
+        const humanSize = (bytes) => {
+            const u = ['B', 'KB', 'MB', 'GB']; let i = 0, n = +bytes;
+            while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+            return `${n.toFixed(1)} ${u[i]}`;
+        };
+        const isAllowedExt = (name, allowed) => {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            return allowed.some(a => ext === a.replace('.', '').toLowerCase());
+        };
+
+        document.querySelectorAll('.file-custom').forEach(box => {
+            const input = box.querySelector('.file-input');
+            const nameEl = box.querySelector('.file-name');
+            const errEl = box.querySelector('[data-error]');
+            const allowed = (box.dataset.allowed || '.xlsx').split(',').map(s => s.trim()).filter(Boolean);
+            const maxBytes = Number(box.dataset.max || 10485760);
+
+            const resetUI = () => {
+                if (nameEl) { nameEl.textContent = '—'; nameEl.hidden = true; }
+                if (errEl) { errEl.textContent = ''; errEl.hidden = true; }
+                box.classList.remove('is-valid', 'is-invalid');
+            };
+            resetUI();
+
+            input.addEventListener('change', () => {
+                resetUI();
+                const f = input.files && input.files[0];
+                if (!f) return;
+                const okExt = isAllowedExt(f.name, allowed);
+                const okSize = f.size <= maxBytes;
+
+                if (!okExt || !okSize) {
+                    box.classList.add('is-invalid');
+                    if (errEl) {
+                        const msgs = [];
+                        if (!okExt) msgs.push(`Extensão inválida. Permitidos: ${allowed.join(', ')}`);
+                        if (!okSize) msgs.push(`Arquivo maior que ${humanSize(maxBytes)} (selecionado: ${humanSize(f.size)})`);
+                        errEl.textContent = msgs.join(' · ');
+                        errEl.hidden = false;
+                    }
+                    input.value = ''; // limpa
+                    return;
+                }
+                if (nameEl) { nameEl.textContent = f.name; nameEl.hidden = false; }
+                box.classList.add('is-valid');
+            });
+        });
+
+        // Confirmação de substituição de temporário: já tratada globalmente
+        // em main.js (attachConfirmBeforeOverwrite). Removido daqui para não
+        // duplicar listeners de submit nos forms gta/dif/sif.
+
+    })();
+</script>
+
+{% endblock %}

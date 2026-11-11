@@ -1,0 +1,181 @@
+"""Worker: despacha jobs de comercializacao para o navegador certo (aqui, um falso)."""
+import threading
+import time
+from datetime import date
+
+import pytest
+from werkzeug.security import generate_password_hash
+
+from app.executor import worker as worker_mod
+from app.extensions import db
+from app.logic.comercializacao import build_commands, build_plano
+from app.models import ExecJob, MapaCredencial, Registro, Role, Usuario, VendasTmp
+
+
+class NavFalso:
+    instancias = []
+    WORKER_ATTEMPTS = 1
+    falhar_em = None
+
+    def __init__(self, mode="HIDE", speed_profile=None, tap_ui=None, module_script=None):
+        self.cmds, self.login_args = [], None
+        NavFalso.instancias.append(self)
+
+    def login(self, *args):
+        self.login_args = args
+
+    def injetar_scripts(self, *a):
+        pass
+
+    def executar_comando(self, cmd, ctx=""):
+        self.cmds.append(cmd)
+        if NavFalso.falhar_em == cmd:
+            return "Erro: [REGISTRO_COM_DADOS] ja tem dados"
+        return "OK: feito"
+
+    def _collect_console_errors(self):
+        return []
+
+    def quit(self):
+        pass
+
+
+@pytest.fixture()
+def cenario(app, monkeypatch):
+    NavFalso.instancias, NavFalso.falhar_em = [], None
+    monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavFalso)
+    monkeypatch.setattr(worker_mod, "Navegador", NavFalso)
+    monkeypatch.setattr(worker_mod, "ensure_valid_credential", lambda cred, dia: (True, None))
+
+    u = Usuario(nome="op", senha=generate_password_hash("pw"), role=Role.USER)
+    db.session.add(u)
+    db.session.commit()
+    c = MapaCredencial(owner_user_id=u.id, usuario_app="usr", numero_sif="167", especie="suino")
+    c.senha = "s"
+    db.session.add(c)
+    reg = Registro(data=date(2026, 3, 1), periodo_ini=date(2026, 3, 1), periodo_fim=date(2026, 3, 31),
+                   tipo="comercializacao", especie="suino", user_id=u.id, status="PT")
+    db.session.add(reg)
+    db.session.flush()
+    venda = {"rotulo": "Venda", "tipo_transacao_idx": 1, "ambito_idx": 1, "operador_idx": 2}
+    cmds = build_commands(build_plano([{"produto": "BACON", "uf": "RS", "quantidade": 3}], backend="browser"), tipo=venda)
+    db.session.add(VendasTmp(registro_id=reg.id, uploaded_by=u.id, filename="v.xlsx", model="venda",
+                             payload={"records": [{"produto": "BACON", "uf": "RS", "quantidade": 3}], "meta": {}}))
+    job = ExecJob(registro_id=reg.id, owner_user_id=u.id, gta_source="vendas", commands=cmds,
+                  meta={"modulo": "comercializacao", "numero_sif": "999"}, status="ESPERA", errors=[])
+    db.session.add(job)
+    db.session.commit()
+    return reg.id, job.id
+
+
+def _rodar_ate_terminar(app, job_id, timeout=15):
+    stop = threading.Event()
+    w = worker_mod.Worker(app, name="w-test", profile="prod", stop_event=stop)
+    t = threading.Thread(target=w.run, daemon=True)
+    t.start()
+    fim = time.time() + timeout
+    status = None
+    while time.time() < fim:
+        db.session.expire_all()
+        status = db.session.get(ExecJob, job_id).status
+        if status in ("SUCESSO", "FALHOU"):
+            break
+        time.sleep(0.1)
+    stop.set()
+    t.join(5)
+    db.session.expire_all()
+    return status
+
+
+def test_job_comercializacao_sucesso(app, cenario):
+    reg_id, job_id = cenario
+    assert _rodar_ate_terminar(app, job_id) == "SUCESSO"
+    nav = NavFalso.instancias[0]
+    assert nav.login_args == ("01/03/2026", "31/03/2026", "usr", "s", "999")     # sif do job.meta
+    job = db.session.get(ExecJob, job_id)
+    assert nav.cmds == job.commands and job.progress == len(job.commands)
+    assert db.session.get(Registro, reg_id).status == "FZ"
+
+
+def test_job_comercializacao_erro_para_cedo_e_marca_registro(app, cenario):
+    reg_id, job_id = cenario
+    NavFalso.falhar_em = db.session.get(ExecJob, job_id).commands[0]
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    job = db.session.get(ExecJob, job_id)
+    assert len(NavFalso.instancias[0].cmds) == 1          # sem repetir (WORKER_ATTEMPTS=1) e sem seguir
+    assert "[REGISTRO_COM_DADOS]" in job.errors[0]
+    assert db.session.get(Registro, reg_id).status == "ER"
+
+
+def test_retry_limpando_portal_troca_primeiro_comando(app, cenario):
+    reg_id, job_id = cenario
+    adm = Usuario(nome="adm", senha=generate_password_hash("pw", method="pbkdf2:sha256"), role=Role.ADMIN)
+    db.session.add(adm)
+    job = db.session.get(ExecJob, job_id)
+    job.status = "FALHOU"
+    db.session.commit()
+    c = app.test_client()
+    c.post("/auth/login", data={"nome": "adm", "senha": "pw"})
+
+    r = c.post(f"/admin/retry-job/{job_id}", data={"limpar": "1"})
+    assert r.status_code == 302
+    db.session.expire_all()
+    job = db.session.get(ExecJob, job_id)
+    assert job.status == "ESPERA" and job.commands[0] == 'limparTransacoes("Venda", ["Venda"])'
+    assert db.session.get(Registro, reg_id).status == "PT"
+
+    # retry normal NUNCA limpa o portal: volta ao comando que aborta se ja houver dados
+    job.status = "FALHOU"
+    db.session.commit()
+    c.post(f"/admin/retry-job/{job_id}")
+    db.session.expire_all()
+    assert db.session.get(ExecJob, job_id).commands[0].startswith("verificarRegistroVazio(")
+
+
+def test_worker_nao_repete_erro_de_negocio_mas_repete_transitorio(app, cenario, monkeypatch):
+    """Comandos nao idempotentes (incluirGta/incluirProduto) nao podem ser relancados apos erro de negocio."""
+    reg_id, job_id = cenario
+
+    class NavDuasTentativas(NavFalso):
+        WORKER_ATTEMPTS = 2
+
+        @classmethod
+        def _erro_transitorio(cls, msg):
+            return "[timeout]" in (msg or "").lower()
+
+    monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavDuasTentativas)
+    primeiro = db.session.get(ExecJob, job_id).commands[0]
+
+    NavFalso.falhar_em = primeiro                     # erro de negocio -> 1 chamada so
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    assert NavFalso.instancias[-1].cmds.count(primeiro) == 1
+
+    job = db.session.get(ExecJob, job_id)
+    job.status, job.errors, job.progress = "ESPERA", [], 0
+    db.session.commit()
+    NavFalso.instancias.clear()
+
+    class NavTimeout(NavDuasTentativas):
+        def executar_comando(self, cmd, ctx=""):
+            self.cmds.append(cmd)
+            return "Erro: [TIMEOUT] sem resposta" if cmd == primeiro else "OK"
+
+    monkeypatch.setattr(worker_mod, "NavegadorComercializacao", NavTimeout)
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    assert NavFalso.instancias[-1].cmds.count(primeiro) == 2     # transitorio: repetiu
+
+
+def test_driver_indisponivel_falha_o_job_com_a_causa_certa(app, cenario, monkeypatch):
+    """Antes: 'Credenciais inválidas: Unable to obtain driver'. Agora: falha de infra, credencial intacta."""
+    from app.runner.drivers import NavegadorIndisponivel
+    reg_id, job_id = cenario
+
+    def sem_driver(cred, dia):
+        raise NavegadorIndisponivel("Navegador/driver do Chrome indisponível (não é problema das credenciais): x.")
+
+    monkeypatch.setattr(worker_mod, "ensure_valid_credential", sem_driver)
+    assert _rodar_ate_terminar(app, job_id) == "FALHOU"
+    job = db.session.get(ExecJob, job_id)
+    assert "não é problema das credenciais" in job.errors[0] and "Credenciais inválidas" not in job.errors[0]
+    assert NavFalso.instancias == [] and db.session.get(Registro, reg_id).status == "ER"
+    assert MapaCredencial.query.one().validado is False and MapaCredencial.query.one().last_error is None

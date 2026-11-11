@@ -1,0 +1,106 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin — Controle de Threads{% endblock %}
+{% block content %}
+
+        <h2 class="page-title">Threads e jobs</h2>
+        <h3 class="section-title">Navegador (Chrome + chromedriver)</h3>
+        <div class="alert {{ 'alert--warning' if driver.ok is none else ('' if driver.ok else 'alert--danger') }}">
+            <div class="alert__icon">{{ '⏳' if driver.ok is none else ('✅' if driver.ok else '⛔') }}</div>
+            <div class="alert__content">
+                <strong>{{ driver.mensagem }}</strong>
+                {% if driver.verificado_em %}<div class="muted">Verificado em {{ driver.verificado_em.strftime('%d/%m/%Y %H:%M:%S') }}</div>{% endif %}
+                {% if driver.tentativas %}
+                <details><summary>{{ driver.tentativas|length }} tentativa(s)</summary>
+                    <ul class="lista-motivos">{% for t in driver.tentativas %}<li>{{ '✔' if t.ok else '✘' }} {{ t.origem }} — {{ t.detalhe }}</li>{% endfor %}</ul>
+                </details>
+                {% endif %}
+                <form method="POST" action="{{ url_for('admin.driver_verificar') }}" class="form-actions" style="justify-content:flex-start">
+                    <button type="submit" class="btn btn--sm btn--outline">Verificar e atualizar driver agora</button>
+                </form>
+            </div>
+        </div>
+
+        <h3 class="section-title">Iniciar workers</h3>
+        <form method="POST" action="{{ url_for('admin.threads') }}">
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label for="numero" class="form-label">Número de Threads:</label>
+                    <input type="number" id="numero" name="numero" min="1" max="10" required placeholder="Ex.: 2">
+                </div>
+                <div class="form-input-multi">
+                    <label for="profile" class="form-label">Perfil:</label>
+                    <select name="profile" id="profile">
+                        <option value="">Selecione...</option>
+                        <option value="prod">Prod (Headless Ultra)</option>
+                        <option value="test">Testes (GUI Rápido)</option>
+                        <option value="dev">Dev (GUI Balanceado)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="row grid-2">
+                <div class="form-input-multi">
+                    <label><input type="checkbox" name="force_restart"> Forçar reinício (reinicia mesmo se houver
+                        workers ativos)</label>
+                </div>
+                <div class="form-input-multi">
+                    <button type="submit">Iniciar Workers</button>
+                </div>
+            </div>
+        </form>
+        <h3 class="section-title">Workers</h3>
+        <div class="table-scroll">
+        <table class="tabela-registros tabela-registros--esq">
+            <thead><tr><th>ID</th><th>Nome</th><th>Perfil</th><th>Threads</th><th>Status</th><th>Iniciado em</th><th>Ação</th></tr></thead>
+            <tbody id="workers-tbody">{% include "admin/_threads_workers.html" %}</tbody>
+        </table>
+        </div>
+
+        <h3 class="section-title">Jobs</h3>
+        <div class="filtros-chips" role="tablist">
+            {% for valor, rotulo in FILTROS %}
+            <a class="chip {{ 'chip--ativo' if valor == filtro else '' }}" href="{{ url_for('admin.threads', filtro=valor) }}" data-filtro="{{ valor }}">{{ rotulo }}</a>
+            {% endfor %}
+        </div>
+        {% if sem_job %}
+        <p class="muted nota">Registros ainda não confirmados (sem job na fila):
+            {% for modulo, n in sem_job.items() %}<strong>{{ modulo }}</strong>: {{ n }}{{ ', ' if not loop.last }}{% endfor %}.
+            Só viram job depois de <em>Confirmar &amp; Executar</em> no preview.</p>
+        {% endif %}
+        <div class="table-scroll">
+        <table class="tabela-registros tabela-registros--esq">
+            <thead><tr><th>Job</th><th>Lançamento</th><th>Status</th><th>Progresso</th><th>Início / Fim</th><th>Erros</th><th>Ações</th></tr></thead>
+            <tbody id="jobs-tbody" data-filtro="{{ filtro }}">{% include "admin/_threads_jobs.html" %}</tbody>
+        </table>
+        </div>
+{% endblock %}
+{% block script %}
+<script>
+    // Atualiza as tabelas com o HTML renderizado pelo servidor (mesmos parciais da pagina).
+    let timer = null;
+    function sessaoExpirou() {
+        clearInterval(timer);                       // para de insistir (antes: um 403 a cada 10 s, sem aviso)
+        if (document.getElementById('aviso-sessao')) return;
+        const a = document.createElement('div');
+        a.id = 'aviso-sessao';
+        a.className = 'alert alert--danger';
+        a.innerHTML = '<div class="alert__icon">🔒</div><div class="alert__content"><strong>Sua sessão expirou.</strong> ' +
+            'A atualização automática parou (os jobs continuam rodando). <a href="/auth/login">Entrar novamente</a>.</div>';
+        document.querySelector('.outras-informacoes').prepend(a);
+    }
+    async function recarregar(url, seletor) {
+        const tbody = document.querySelector(seletor);
+        if (!tbody) return;
+        try {
+            const r = await fetch(url, { headers: { 'X-Requested-With': 'fetch' } });
+            if (r.status === 401 || r.status === 403) return sessaoExpirou();
+            if (r.ok) tbody.innerHTML = await r.text();
+        } catch (e) { console.error('Falha ao atualizar', seletor, e); }
+    }
+    function atualizar() {
+        const filtro = document.querySelector('#jobs-tbody').dataset.filtro;
+        recarregar('/admin/threads/workers', '#workers-tbody');
+        recarregar('/admin/threads/jobs?filtro=' + encodeURIComponent(filtro), '#jobs-tbody');
+    }
+    timer = setInterval(atualizar, 10000);
+</script>
+{% endblock %}

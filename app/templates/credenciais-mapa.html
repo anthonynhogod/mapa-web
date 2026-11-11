@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% block title %}Credenciais MAPA{% endblock %}
+{% block mini_painel %}
+{% endblock %}
+{% block content %}
+<h2 class="titulo-form">
+  {{ 'Editar credencial' if cred else 'Cadastrar nova credencial' }}
+</h2>
+
+<form method="POST" action="{{ url_for('.credenciais_mapa') }}" class="form-completo" autocomplete="off">
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="usuario_app">Usuário (MAPA)</label>
+      <input id="usuario_app" name="usuario_app" type="text" required value="{{ form.usuario_app }}"
+        placeholder="ex.: joao.silva.ex">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="senha">
+        Senha {{ '(deixe em branco para manter)' if cred else '' }}
+      </label>
+      <input id="senha" name="senha" type="password" {% if not cred %}required{% endif %}
+        placeholder="{{ '••••••••' if cred else 'Digite a senha da automação' }}">
+    </div>
+  </div>
+
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="numero_sif">Número SIF</label>
+      <input id="numero_sif" name="numero_sif" type="text" inputmode="numeric" pattern="[0-9]+" required
+        value="{{ form.numero_sif }}" placeholder="ex.: 1234">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="especie">Espécie</label>
+      <select id="especie" name="especie" required>
+        {% for valor, rotulo in especies %}<option value="{{ valor }}" {{ 'selected' if form.especie == valor else '' }}>{{ rotulo }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+
+  {% if not usa_api %}
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cod_uf">UF do estabelecimento (opcional)</label>
+      <select id="cod_uf" name="cod_uf">
+        <option value="">— não informar (GTAs lançadas como RS) —</option>
+        {% for u in ufs %}<option value="{{ u }}" {{ 'selected' if form.cod_uf == u else '' }}>{{ u }}</option>{% endfor %}
+      </select>
+      <small class="muted">As planilhas de GTA não trazem a UF de origem; o sistema usa esta UF e mostra qual está usando no preview.</small>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if usa_api %}
+  <h3 class="sub-titulo-form">Estabelecimento (webservice do MAPA — ambiente: {{ ambiente }})</h3>
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cpf_cnpj">CPF/CNPJ do estabelecimento</label>
+      <input id="cpf_cnpj" name="cpf_cnpj" type="text" required value="{{ form.cpf_cnpj }}"
+        placeholder="11 ou 14 dígitos">
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="ambito">Âmbito de inspeção</label>
+      <select id="ambito" name="ambito" required>
+        {% for a in ['SIF', 'ER'] %}<option value="{{ a }}" {{ 'selected' if form.ambito == a else '' }}>{{ a }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="row grid-2">
+    <div class="form-input">
+      <label class="form-label" for="cod_uf">UF do estabelecimento</label>
+      <select id="cod_uf" name="cod_uf" required>
+        {% for u in ufs %}<option value="{{ u }}" {{ 'selected' if form.cod_uf == u else '' }}>{{ u }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="form-input">
+      <label class="form-label" for="cod_municipio_ibge">Código IBGE do município</label>
+      <input id="cod_municipio_ibge" name="cod_municipio_ibge" type="text" required
+        value="{{ form.cod_municipio_ibge }}" placeholder="7 dígitos">
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="form-actions">
+    <button type="submit" class="btn">
+      {{ 'Atualizar' if cred else 'Salvar credencial' }}
+    </button>
+  </div>
+
+  {% if cred %}
+  <div style="margin-top: 12px; color: var(--muted); font-size: .95rem;">
+    <div>Registrado em:
+      {% if cred.created_at %}{{ cred.created_at.strftime('%d/%m/%Y %H:%M') }}{% else %}-{% endif %}
+    </div>
+    <div>Última atualização:
+      {% if cred.updated_at %}{{ cred.updated_at.strftime('%d/%m/%Y %H:%M') }}{% else %}-{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</form>
+
+{% if cred and usa_api %}
+<form method="POST" action="{{ url_for('.credenciais_mapa_testar') }}" style="margin-top:12px;">
+  <button type="submit" class="btn btn--outline">Testar conexão com o webservice ({{ ambiente }})</button>
+  {% if cred.validate_at %}
+  <span style="margin-left:8px;">
+    Último teste: {{ cred.validate_at.strftime('%d/%m/%Y %H:%M') }} —
+    {{ 'OK' if cred.validado else 'falhou' }}{% if cred.last_error %}: {{ cred.last_error }}{% endif %}
+  </span>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}

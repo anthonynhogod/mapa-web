@@ -1,0 +1,65 @@
+# app/forms.py
+from flask_wtf import FlaskForm
+from wtforms import SelectField, StringField, SubmitField
+from wtforms.validators import Optional
+from flask_wtf.file import FileAllowed, FileField, FileRequired
+
+# Você pode mover isso para um módulo de constantes se preferir.
+MODEL_CHOICES = [
+    ("padrao", "Padrão"),
+    ("alternativo", "Alternativo"),
+]
+
+ALLOWED_EXTENSIONS = ["csv", "txt", "xlsx"]
+
+class UploadFileForm(FlaskForm):
+    file = FileField(
+        "Arquivo",
+        validators=[FileRequired(), FileAllowed(ALLOWED_EXTENSIONS, "Permitidos: CSV, TXT, XLSX")],
+    )
+    model = SelectField("Modelo", choices=MODEL_CHOICES)
+    submit = SubmitField("Enviar")
+
+# Se quiser rótulos específicos por tipo:
+class UploadGtaForm(UploadFileForm):
+    pass
+
+class UploadDifForm(UploadFileForm):
+    pass
+
+class UploadSifForm(UploadFileForm):
+    pass
+
+
+class UploadVendasForm(FlaskForm):
+    """Planilha de vendas (comercializacao). O periodo e lido do titulo da planilha;
+    os campos de data so sao necessarios quando o titulo nao traz o periodo."""
+    lancamento = SelectField("Tipo de lançamento", choices=[])   # opcoes preenchidas na view
+    file = FileField(
+        "Planilha",
+        validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")],
+    )
+    periodo_ini = StringField("Inicio do periodo (dd/mm/aaaa)", validators=[Optional()])
+    periodo_fim = StringField("Fim do periodo (dd/mm/aaaa)", validators=[Optional()])
+    obs = StringField("Observacoes", validators=[Optional()])
+    submit = SubmitField("Enviar planilha")
+
+
+class UploadProducaoForm(FlaskForm):
+    """Planilha de producao (mapa MENSAL). A competencia (MM/AAAA) e lida das colunas de dia;
+    o campo so e necessario quando a planilha nao a traz."""
+    file = FileField(
+        "Planilha",
+        validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")],
+    )
+    competencia = StringField("Competência (MM/AAAA)", validators=[Optional()])
+    obs = StringField("Observacoes", validators=[Optional()])
+    submit = SubmitField("Enviar planilha")
+
+
+class VerificacaoForm(FlaskForm):
+    """Relatorio exportado do MAPA + a base de comparacao (registro ja lancado ou planilha de vendas)."""
+    mapa = FileField("Relatório do MAPA", validators=[FileRequired(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")])
+    registro = SelectField("Comparar com", choices=[], validate_choice=False)      # id do registro ou "" (= planilha)
+    vendas = FileField("Planilha de vendas", validators=[Optional(), FileAllowed(["xlsx"], "Use um arquivo .xlsx")])
+    submit = SubmitField("Conferir")

@@ -1,0 +1,149 @@
+{% extends "layout.html" %}
+{% from "_macros/status.html" import verif_badge %}
+{% block title %}Conferência #{{ v.id }}{% endblock %}
+{% block mini_painel %}{% endblock %}
+{% macro tabela_celulas(lista) %}
+<div class="table-scroll">
+<table class="tabela-registros tabela-registros--esq">
+  <thead><tr><th>Descrição (MAPA)</th><th>UF</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Situação</th><th>Observação</th></tr></thead>
+  <tbody>
+    {% for c in lista %}
+    <tr>
+      <td><strong>{{ c.descricao }}</strong>
+        {% if c['itens'] %}<details><summary>{{ c['itens']|length }} item(ns) enviado(s)</summary>
+          <ul class="lista-motivos">{% for i in c['itens'] %}<li>{{ i.produto or ('id ' ~ i.id) }} — {{ i.quantidade|br }}{% if i.id %} <span class="muted">(id {{ i.id }})</span>{% endif %}</li>{% endfor %}</ul>
+        </details>{% endif %}</td>
+      <td>{{ c.uf }}</td>
+      <td>{{ c.nosso|br }}</td>
+      <td>{{ c.mapa|br }}</td>
+      <td class="{{ 'num-neg' if c.diff < 0 else ('num-pos' if c.diff > 0 else '') }}">{{ c.diff|br }}</td>
+      <td><span class="badge badge--{{ 'success' if c.status == 'ok' else ('info' if c.status == 'arredondamento' else 'danger') }}">{{ c.rotulo }}</span></td>
+      <td class="muted obs">{{ c.dica }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="7" class="vazio">Nada para mostrar.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endmacro %}
+{% block content %}
+{% set t = v.resumo.totais %}
+<div class="page-head">
+  <h2 class="titulo-form">Conferência #{{ v.id }} {{ verif_badge(v.status) }}</h2>
+  <a class="btn btn--outline" href="{{ url_for('verificacao.exportar', verificacao_id=v.id) }}">Baixar .xlsx</a>
+  <a class="btn" href="{{ url_for('verificacao.lista') }}">Nova conferência</a>
+</div>
+
+<p class="muted">
+  {{ v.created_at.strftime('%d/%m/%Y %H:%M') }} ·
+  {% if registro %}registro {{ registro.periodo_label }}{% elif v.registro_id %}registro #{{ v.registro_id }}{% else %}planilha avulsa ({{ v.arquivo_base }}){% endif %} ·
+  base: {{ ORIGEM_ROTULO.get(v.origem_base, v.origem_base) }}{% if v.job_id %} (job #{{ v.job_id }}){% endif %} ·
+  {% if portal %}lido direto do portal{% if v.resumo.lido_em %} em {{ v.resumo.lido_em[:16].replace('T', ' ') }} (UTC){% endif %} ({{ v.resumo.linhas_relatorio }} linhas) · {{ v.resumo.itens_enviados }} itens esperados
+  {% else %}relatório: {{ v.arquivo_mapa }} ({{ v.resumo.linhas_relatorio }} linhas) · {{ v.resumo.itens_enviados }} itens enviados{% endif %}
+</p>
+
+{% if v.status == 'OK' %}
+<div class="alert"><div class="alert__icon">✅</div><div class="alert__content"><strong>Tudo confere:</strong>
+  {% if portal %}as {{ t.linhas_portal }} linhas do portal batem, uma a uma, com o que foi enviado.{% else %}as {{ t.celulas }} combinações descrição × UF batem com o relatório do MAPA.{% endif %}</div></div>
+{% elif portal %}
+<div class="alert alert--danger"><div class="alert__icon">⛔</div><div class="alert__content">
+  <strong>{{ t.linhas_divergentes }} linha(s) não conferem com o portal</strong>
+  (faltam {{ linhas.faltando|length }}, quantidade diferente {{ linhas.diferentes|length }}, sobram {{ linhas.sobrando|length }}).
+  Diferença total (portal − esperado): <strong class="{{ 'num-neg' if t.diff < 0 else 'num-pos' }}">{{ t.diff|br }} kg</strong>.
+</div></div>
+{% else %}
+<div class="alert alert--danger"><div class="alert__icon">⛔</div><div class="alert__content">
+  <strong>{{ t.divergentes }} de {{ t.celulas }} combinações descrição × UF não conferem.</strong>
+  Diferença total (MAPA − enviado): <strong class="{{ 'num-neg' if t.diff < 0 else 'num-pos' }}">{{ t.diff|br }} kg</strong>.
+</div></div>
+{% endif %}
+
+{% if v.resumo.avisos %}
+<div class="alert alert--warning"><div class="alert__icon">⚠️</div><div class="alert__content"><strong>Atenção:</strong>
+  <ul class="lista-motivos">{% for a in v.resumo.avisos %}<li>{{ a }}</li>{% endfor %}</ul></div></div>
+{% endif %}
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi__label">{{ 'Esperado (kg)' if portal else 'Enviado (kg)' }}</div><div class="kpi__valor">{{ t.nosso|br }}</div></div>
+  <div class="kpi"><div class="kpi__label">{{ 'No portal (kg)' if portal else 'No MAPA (kg)' }}</div><div class="kpi__valor">{{ t.mapa|br }}</div></div>
+  <div class="kpi {{ 'kpi--alerta' if t.diff != 0 else '' }}"><div class="kpi__label">Diferença (kg)</div><div class="kpi__valor {{ 'num-neg' if t.diff < 0 else ('num-pos' if t.diff > 0 else '') }}">{{ t.diff|br }}</div></div>
+  {% if portal %}<div class="kpi {{ 'kpi--alerta' if t.linhas_divergentes else '' }}"><div class="kpi__label">Linhas divergentes</div><div class="kpi__valor">{{ t.linhas_divergentes }} <span class="muted">de {{ t.linhas_plano }}</span></div></div>
+  {% else %}<div class="kpi {{ 'kpi--alerta' if t.divergentes else '' }}"><div class="kpi__label">Células divergentes</div><div class="kpi__valor">{{ t.divergentes }} <span class="muted">de {{ t.celulas }}</span></div></div>{% endif %}
+</div>
+
+<div class="tabs">
+  {% if portal %}<button class="tab-btn active" type="button" onclick="showTab('tab-linhas', this)">Linhas no portal ({{ t.linhas_divergentes }})</button>{% endif %}
+  <button class="tab-btn {{ '' if portal else 'active' }}" type="button" onclick="showTab('tab-div', this)">Divergências por célula ({{ divergentes|length }})</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-uf', this)">Por UF</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-prod', this)">Por produto</button>
+  <button class="tab-btn" type="button" onclick="showTab('tab-todas', this)">Todas as células ({{ celulas|length }})</button>
+</div>
+
+{% if portal %}
+<div id="tab-linhas" class="tab-pane active">
+  {% if linhas.faltando %}
+  <h3 class="section-title">Faltam no portal ({{ linhas.faltando|length }})</h3>
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>UF</th><th>Descrição</th><th>Produto enviado</th><th>Quantidade</th></tr></thead>
+    <tbody>{% for l in linhas.faltando %}<tr><td>{{ l.uf }}</td><td><strong>{{ l.descricao }}</strong></td><td>{{ l.produto or '—' }} <span class="muted">(id {{ l.id }})</span></td><td class="num-neg">{{ l.quantidade|br }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% if a_complementar %}
+  <form method="post" action="{{ url_for('verificacao.complementar', verificacao_id=v.id) }}" class="form-actions" style="justify-content:flex-start">
+    <button class="btn" type="submit" onclick="return confirm('O worker vai abrir o registro no portal, ler de novo e INCLUIR apenas as linhas que ainda faltarem ({{ a_complementar }}). Nada é excluído. Continuar?')">Complementar o que falta ({{ a_complementar }} linha(s))</button>
+    <span class="muted">Só inclui linhas no registro existente; não exclui nem altera quantidade. Depois lê o portal de novo e confere.</span>
+  </form>
+  {% endif %}
+  {% endif %}
+  {% if linhas.diferentes %}
+  <h3 class="section-title">Quantidade diferente ({{ linhas.diferentes|length }})</h3>
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>UF</th><th>Descrição</th><th>Esperado</th><th>No portal</th><th>Diferença</th></tr></thead>
+    <tbody>{% for l in linhas.diferentes %}<tr><td>{{ l.uf }}</td><td><strong>{{ l.descricao }}</strong></td><td>{{ l.esperado|br }}</td><td>{{ l.portal|br }}</td><td class="{{ 'num-neg' if l.diff < 0 else 'num-pos' }}">{{ l.diff|br }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  {% if linhas.sobrando %}
+  <h3 class="section-title">Sobram no portal ({{ linhas.sobrando|length }})</h3>
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>UF</th><th>Produto</th><th>Quantidade</th><th>ID Transação</th></tr></thead>
+    <tbody>{% for l in linhas.sobrando %}<tr><td>{{ l.uf }}</td><td>{{ l.produto }}</td><td class="num-pos">{{ l.quantidade|br }}</td><td>{{ l.transacao }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% endif %}
+  {% if linhas.diferentes or linhas.sobrando %}
+  <div class="alert alert--warning"><div class="alert__icon">ℹ️</div><div class="alert__content">
+    Corrigir quantidade ou remover linhas sobrando exige <strong>excluir linhas no portal</strong>. Essa etapa ainda não está disponível
+    (o portal não tem “editar”, só “excluir”); por enquanto o complemento só inclui o que falta.
+  </div></div>
+  {% endif %}
+  {% if not (linhas.faltando or linhas.diferentes or linhas.sobrando) %}<p class="muted">Cada linha enviada está no portal, com a mesma quantidade ({{ linhas.ok }} linhas conferidas).</p>{% endif %}
+</div>
+{% endif %}
+<div id="tab-div" class="tab-pane {{ '' if portal else 'active' }}">{{ tabela_celulas(divergentes) }}</div>
+
+<div id="tab-uf" class="tab-pane">
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>UF</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Células divergentes</th></tr></thead>
+    <tbody>{% for g in v.resultado.por_uf %}<tr><td>{{ g.uf }}</td><td>{{ g.nosso|br }}</td><td>{{ g.mapa|br }}</td>
+      <td class="{{ 'num-neg' if g.diff < 0 else ('num-pos' if g.diff > 0 else '') }}">{{ g.diff|br }}</td><td>{{ g.divergentes }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div id="tab-prod" class="tab-pane">
+  <div class="table-scroll"><table class="tabela-registros tabela-registros--esq">
+    <thead><tr><th>Descrição (MAPA)</th><th>Enviado (kg)</th><th>MAPA (kg)</th><th>Diferença</th><th>Células divergentes</th></tr></thead>
+    <tbody>{% for g in v.resultado.por_produto %}<tr><td>{{ g.descricao }}</td><td>{{ g.nosso|br }}</td><td>{{ g.mapa|br }}</td>
+      <td class="{{ 'num-neg' if g.diff < 0 else ('num-pos' if g.diff > 0 else '') }}">{{ g.diff|br }}</td><td>{{ g.divergentes }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div id="tab-todas" class="tab-pane">{{ tabela_celulas(celulas) }}</div>
+
+<script>
+  function showTab(id, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+</script>
+{% endblock %}

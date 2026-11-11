@@ -1,0 +1,6 @@
+py -m flask db migrate -m "Descrição da alteração"
+py -m flask db upgrade
+py -m flask db current     # versão atual aplicada
+py -m flask db history     # histórico de migrações
+py -m flask db show head   # detalhes da última revisão
+py -m flask db downgrade -1  # rollback de 1 revisão

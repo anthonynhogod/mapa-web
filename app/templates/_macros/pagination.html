@@ -1,0 +1,53 @@
+{# templates/_macros/pagination.html #}
+{% macro render_pagination_numeric(pagination, window=2) %}
+  {% set cur = pagination.page %}
+  {% set pages = pagination.pages %}
+  {% set total = pagination.total %}
+
+  {# calcula janela [start..end] respeitando os limites #}
+  {% set start = cur - window %}
+  {% if start < 1 %}{% set start = 1 %}{% endif %}
+  {% set end = cur + window %}
+  {% if end > pages %}{% set end = pages %}{% endif %}
+
+  <nav aria-label="Paginação" class="pagination">
+    <a class="btn" href="{{ url_for_with(page=1) }}"
+       aria-disabled="{{ 1 if cur <= 1 else 0 }}"
+       {% if cur <= 1 %}tabindex="-1" style="pointer-events:none;opacity:.5"{% endif %}>&laquo;</a>
+
+    <a class="btn" href="{{ url_for_with(page=cur-1) }}"
+       aria-disabled="{{ 1 if cur <= 1 else 0 }}"
+       {% if cur <= 1 %}tabindex="-1" style="pointer-events:none;opacity:.5"{% endif %}>&#8249;</a>
+
+    {# primeiro número e reticências à esquerda #}
+    {% if start > 1 %}
+      <a class="btn" href="{{ url_for_with(page=1) }}">1</a>
+      {% if start > 2 %}<span class="ellipsis">…</span>{% endif %}
+    {% endif %}
+
+    {# janela central #}
+    {% for x in range(start, end + 1) %}
+      {% if x == cur %}
+        <span class="btn active">[{{ x }}]</span>
+      {% else %}
+        <a class="btn" href="{{ url_for_with(page=x) }}">{{ x }}</a>
+      {% endif %}
+    {% endfor %}
+
+    {# reticências à direita e último número #}
+    {% if end < pages %}
+      {% if end < pages - 1 %}<span class="ellipsis">…</span>{% endif %}
+      <a class="btn" href="{{ url_for_with(page=pages) }}">{{ pages }}</a>
+    {% endif %}
+
+    <a class="btn" href="{{ url_for_with(page=cur+1) }}"
+       aria-disabled="{{ 1 if cur >= pages else 0 }}"
+       {% if cur >= pages %}tabindex="-1" style="pointer-events:none;opacity:.5"{% endif %}>&#8250;</a>
+
+    <a class="btn" href="{{ url_for_with(page=pages) }}"
+       aria-disabled="{{ 1 if cur >= pages else 0 }}"
+       {% if cur >= pages %}tabindex="-1" style="pointer-events:none;opacity:.5"{% endif %}>&raquo;</a>
+
+    <span class="page-indicator">Página {{ cur }} de {{ pages }} — {{ total }} itens</span>
+  </nav>
+{% endmacro %}

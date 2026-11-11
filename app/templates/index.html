@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block menu %}
+<div class="ancora-menu"><a href="{{ url_for('public.sobre')}}">Sobre</a></div>
+<div class="ancora-menu"><a href="{{ url_for('auth.login')}}">Login</a></div>
+{% endblock %}
+{% block main %}
+<div class="content-main">
+    <div class="col-100">
+        <h1 style="margin: 0 auto;margin-bottom: 15px;">
+            Página inicial
+        </h1>
+    </div>
+    <img src="{{ url_for('static', filename='img/home-mapa.png')}}" class="img-grande">
+
+    <div class="content">
+        <div class="col-50">
+            <p class="f-larger"><span class="bold">Automatize seus Lançamentos!</span><br>
+                Com a nossa nova ferramenta de lançamentos permitimos que a sua empresa inclua os dados de abate
+                de forma automatica e eficiente.
+                Somos um meio de lançar seus dados de abate no portal do MAPA, minimizando erros e inconvenientes.
+            </p>
+        </div>
+        <div class="col-50">
+            <img src="{{ url_for('static', filename= 'img/home-mapa.png')}}" class="">
+        </div>
+
+    </div>
+    <div class="content">
+        <div class="col-50">
+            <img src="{{ url_for('static', filename='img/grafico.png')}}" class="">
+        </div>
+        <div class="col-50">
+            <p class="f-larger"><span class="bold">Gerencie os seus lançamentos!</span><br>
+                Tenha o controle de todos os seu lançamentos e monitore o tempo de lançamento e
+                erros.Gere relatórios diretamente do MAPA e tenha o controle total sobre os lançamentos da sua
+                empresa.
+            </p>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

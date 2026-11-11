@@ -1,0 +1,34 @@
+# Copie para .flaskenv e preencha. NUNCA commite o .flaskenv real.
+FLASK_APP=wsgi:app
+FLASK_RUN_HOST=0.0.0.0
+FLASK_RUN_PORT=5000
+API_TOKENS=troque-este-token
+JWT_SECRET=troque-este-segredo
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+FERNET_KEY=
+SECRET_KEY=troque-esta-chave
+# Opcional: se vazio/inexistente o Selenium Manager baixa o driver compativel automaticamente
+CHROMEDRIVER_PATH=
+SCRIPTS_JS_PATH=app/runner/scripts/scripts.js
+NAV_MODE=HIDE
+NAV_SPEED_PROFILE=ultra
+NAV_PROFILE=prod
+NAV_TAP_UI=never
+APP_ENV=dev
+
+# --- Execução: navegador/Selenium (padrão) ou webservice do MAPA (precisa de acesso liberado pelo MAPA) ---
+EXEC_BACKEND=browser
+# homologacao (padrão, ambiente de testes do MAPA) | producao (grava dados REAIS)
+MAPA_API_AMBIENTE=homologacao
+# MAPA_API_URL=            # sobrescreve a raiz dos serviços (proxy/testes)
+MAPA_API_MD5=1             # senha em md5 no Basic (manual v1.3, item 2.1)
+# Formato de data dos corpos: iso (yyyy-mm-dd) | br (dd/mm/aaaa)
+MAPA_API_DATA_COMERCIALIZACAO=iso
+MAPA_API_DATA_ABATE=br
+
+# Confere/atualiza o chromedriver ao subir (modo navegador). 0 desliga.
+DRIVER_AUTOCHECK=1
+# Rede restrita (opcional, lidas pelo Selenium Manager): SE_PROXY=http://proxy:8080  SE_DRIVER_MIRROR_URL=...  SE_CACHE_PATH=...
+
+# Depois de cada lancamento de comercializacao concluido, le o portal (somente leitura) e confere linha a linha. 0 desliga.
+AUTO_CONFERIR=1

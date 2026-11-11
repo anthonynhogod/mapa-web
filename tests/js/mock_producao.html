@@ -1,0 +1,284 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>mock portal producao</title>
+<style>
+  .ui-dialog{position:fixed;top:10px;left:10px;display:none;background:#eee;border:1px solid #333}
+  .ui-dialog.open{display:block}
+  .ui-datatable-data tr{display:table-row}
+</style></head>
+<body>
+<!-- Simulador minimo do mapa de PRODUCAO (JSF/PrimeFaces) para testar app/runner/scripts/producao.js sem o portal.
+     Os botoes trazem os onclick REAIS do portal (PrimeFaces.ab({s:..., u:..., onco:...})).
+     ?ids=legacy -> ids "j_idt..." iguais aos do portal; ?ids=random -> numeros trocados.
+     ?page=N linhas por pagina do mapa; ?rpage=N linhas por pagina da busca de produto;
+     ?menu=0 -> o item do select de Producao nao responde ao clique (forca o fallback do <select>);
+     ?bind=nunca -> o botao Incluir das buscas nunca habilita; ?add=timeout -> o servidor nunca responde ao "Adicionar" produto; ?semsif=1 -> pesquisa de estabelecimento vazia. -->
+<div id="mensagensValidacao"><div class="ui-messages"></div></div>
+<div id="outContent"></div>
+<div id="dialogs"></div>
+<script>
+const Q = new URLSearchParams(location.search);
+const MODE = Q.get('ids') || 'legacy';
+const PAGE = Number(Q.get('page') || 3), RPAGE = Number(Q.get('rpage') || 2);
+const MENU = Q.get('menu') !== '0', ADD = Q.get('add') || '';
+const FC = 'formConsultarMapaProducao', FI = 'formIncluirMapaProducao';
+
+const rnd = {};
+function J(legacy) {
+  if (MODE === 'legacy') return legacy;
+  if (!rnd[legacy]) rnd[legacy] = 'j_idt' + (Number(legacy.slice(5)) + 5000 + Object.keys(rnd).length * 3);
+  return rnd[legacy];
+}
+const P = { emp: J('j_idt464'), ins: J('j_idt491'), qry: J('j_idt504') };
+
+const CATALOGO = [
+  {id: 17176, nome: 'APRESUNTADO'}, {id: 1717, nome: 'APRESUNTADO ANTIGO'}, {id: 17178, nome: 'APRESUNTADO COZIDO'},
+  {id: 17175, nome: 'APRESUNTADO FATIADO'}, {id: 17189, nome: 'BACON'}, {id: 17186, nome: 'BACON FATIADO'},
+  {id: 18152, nome: 'LINGUICA FRESCAL'}, {id: 18321, nome: 'MIUDOS SALGADOS'},
+  {id: 18538, nome: 'RESIDUOS DE ABATE', ing: 'MIX'}, {id: 18538, nome: 'RESIDUOS DE ABATE', ing: 'Único'},
+];
+
+// ---------- "servidor" ----------
+const S = window.__server = {
+  view: 'consulta', registros: [], periodo: '', estab: null, estabNome: '', producao: '',
+  produtos: [], ingredientes: [], pPag: 0, busca: [], bPag: 0, sel: null, empSel: null, prodBound: null,
+  saved: null, unknown: [], log: [],
+};
+let pending = 0;
+
+function setMsg(sev, txt) {
+  const box = document.querySelector('#mensagensValidacao .ui-messages');
+  box.innerHTML = txt ? `<div class="ui-messages-${sev}"><ul><li><span class="ui-messages-${sev}-summary">${txt}</span></li></ul></div>` : '';
+}
+const byId = (id) => document.getElementById(id);
+const val = (id) => byId(id).value;
+
+// ---------- DOM ----------
+function renderConsulta() {
+  byId('outContent').innerHTML = `<form id="${FC}">
+    <button type="button" id="${FC}:${J('j_idt85')}:${J('j_idt87')}:commandPrepareInsert_${J('j_idt87')}"
+      onclick="PrimeFaces.ab({s:'${FC}:${J('j_idt85')}:${J('j_idt87')}:commandPrepareInsert_${J('j_idt87')}',p:'${FC}',u:'outContent mensagensValidacao'});return false;">novo</button>
+  </form>`;
+}
+function periodoHtml() {
+  const id = `${FI}:periodoProducaoMascara`;
+  return `<input id="${id}" name="${id}" type="text" value="${S.periodo}" class="ui-inputfield ui-inputmask"
+    onchange="PrimeFaces.ab({s:&quot;${id}&quot;,e:&quot;change&quot;,p:&quot;${id}&quot;,u:&quot;${id}&quot;});">`;
+}
+function producaoHtml() {
+  const b = `${FI}:producao:producao`;
+  const opts = [['', 'Selecione'], ['N', 'Não'], ['S', 'Sim']];
+  return `<div id="${b}" class="ui-selectonemenu">
+    <select id="${b}_input" onchange="PrimeFaces.ab({s:&quot;${b}&quot;,e:&quot;change&quot;,p:&quot;${b}&quot;,u:&quot;@(.observacoesSelector) @(.dtproducaoProdutosPoa) @(.dtcondenacaoProdutos)&quot;});">
+      ${opts.map(([v, t]) => `<option value="${v}"${S.producao === v ? ' selected' : ''}>${t}</option>`).join('')}</select>
+    <ul id="${b}_items">${opts.map(([v, t], i) =>
+      `<li class="ui-selectonemenu-item" data-label="${t}" id="${b}_${i}" onclick="${MENU ? `pickProducao('${v}')` : ''}">${t}</li>`).join('')}</ul></div>`;
+}
+function pickProducao(v) {            // o item do menu do PrimeFaces: atualiza o select e dispara o change
+  const sel = byId(`${FI}:producao:producao_input`);
+  sel.value = v; sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+function tabelaProdutosHtml() {
+  const total = S.produtos.length, pages = Math.max(1, Math.ceil(total / PAGE));
+  const ini = S.pPag * PAGE, dis = (c) => c ? ' ui-state-disabled' : '';
+  const rows = total ? S.produtos.slice(ini, ini + PAGE).map((p, k) => {
+    const c = CATALOGO.find(x => x.id === p.id);
+    return `<tr data-ri="${ini + k}" data-rk="MapaProducaoProdutoVO[id=${p.id}]"><td>${c ? c.nome : p.id}</td><td>${p.qtd}</td>
+      <td><button type="button" id="${FI}:producaoProdutosPoa:${ini + k}:remover">x</button></td></tr>`;
+  }).join('') : '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="7">Nenhum registro encontrado</td></tr>';
+  const id = `${FI}:producaoProdutosPoa`, nv = `${id}:${J('j_idt249')}`;
+  return `<div class="ui-datatable" id="${id}">
+    <button type="button" id="${nv}" class="ui-button"
+      onclick="PrimeFaces.ab({s:'${nv}',p:'${nv}',u:'@(.frmDialogInsertSelector) @(.dialogInsertSelector) @(.dialogQuerySelector) @(.frmDialogQuerySelector) @(.frmDialogInsertSelector) @(.msgDialogInsertSelector)',onco:function(xhr,status,args){PF('dialogIncluirProdutoPadronizado').show();}});return false;"><span>Novo</span></button>
+    <table><tbody id="${id}_data" class="ui-datatable-data">${rows}</tbody></table>
+    <div class="ui-paginator"><span class="ui-paginator-current">(${S.pPag + 1} of ${pages})</span>
+      <span class="ui-paginator-first${dis(S.pPag === 0)}" onclick="pagP('first')">«</span>
+      <span class="ui-paginator-next${dis(S.pPag >= pages - 1)}" onclick="pagP('next')">›</span>
+      <span class="ui-paginator-last${dis(S.pPag >= pages - 1)}" onclick="pagP('last')">»</span></div></div>`;
+}
+function pagP(w) {
+  if (event.target.classList.contains('ui-state-disabled')) return;
+  const pages = Math.max(1, Math.ceil(S.produtos.length / PAGE));
+  S.pPag = w === 'first' ? 0 : w === 'last' ? pages - 1 : S.pPag + 1;
+  setTimeout(renderTabela, 15);
+}
+function renderTabela() { const c = byId('boxTabela'); if (c) c.innerHTML = tabelaProdutosHtml(); }
+function renderPeriodo() { const c = byId('boxPeriodo'); if (c) c.innerHTML = periodoHtml(); }
+function renderIncluir() {
+  const lupa = `${FI}:${J('j_idt234')}`, ins = `${FI}:${J('j_idt295')}:${J('j_idt296')}:commandInsert_${J('j_idt296')}`;
+  byId('outContent').innerHTML = `<form id="${FI}">
+    <div id="boxPeriodo">${periodoHtml()}</div>
+    <div id="${FI}:panelNumeroRegistro">
+      <input id="${FI}:numeroRegistro" readonly value="${S.estab || ''}">
+      <button type="button" id="${lupa}" title="Pesquisar"
+        onclick="PrimeFaces.ab({s:&quot;${lupa}&quot;,p:&quot;${lupa}&quot;,u:&quot;${FI}&quot;,onco:function(xhr,status,args){PF('dialogPesquisarRegistro').show();}});return false;"><span>ui-button</span></button>
+    </div>
+    <input id="${FI}:nomeEstabelecimento:nomeEstabelecimento" readonly value="${S.estabNome}">
+    ${producaoHtml()}
+    <div id="boxTabela">${tabelaProdutosHtml()}</div>
+    <button type="button" id="${ins}"
+      onclick="PrimeFaces.ab({s:&quot;${ins}&quot;,u:&quot;outContent mensagensValidacao&quot;});return false;">Confirmar</button></form>`;
+}
+function render() { if (S.view === 'consulta') renderConsulta(); else renderIncluir(); }
+
+// ---------- dialogos (persistentes) ----------
+function buildDialogs() {
+  const lupaP = `${P.ins}:frmDialog:produto:commandSearch_produto`;
+  const add = `${P.ins}:frmDialog:${J('j_idt501')}:${J('j_idt502')}:commandDialogAdd_${J('j_idt502')}`;
+  const qry = `${P.qry}:frmDialog:${J('j_idt508')}:${J('j_idt509')}:commandDialogQuery_${J('j_idt509')}`;
+  const bnd = `${P.qry}:frmDialog:${J('j_idt531')}:${J('j_idt532')}:commandDialogBind_${J('j_idt532')}`;
+  const eq = `${P.emp}:frmDialog:${J('j_idt471')}:${J('j_idt472')}:commandDialogQuery_${J('j_idt472')}`;
+  const eb = `${P.emp}:frmDialog:${J('j_idt488')}:${J('j_idt489')}:commandDialogBind_${J('j_idt489')}`;
+  byId('dialogs').innerHTML = `
+  <div class="ui-dialog" id="dlgIns"><form id="${P.ins}:frmDialog">
+    <input id="${P.ins}:frmDialog:produto:produto" readonly placeholder="produto selecionado">
+    <button type="button" id="${lupaP}"
+      onclick="PrimeFaces.ab({s:&quot;${lupaP}&quot;,u:&quot;mensagensValidacao @(.frmDialogQuerySelector) @(.msgDialogQuerySelector)&quot;,onco:function(xhr,status,args){PF('dialogPesquisarProdutoPadronizado').show();}});return false;">buscar</button>
+    <input id="${P.ins}:frmDialog:quantidade_input" type="text">
+    <input id="${P.ins}:frmDialog:quantidade_hinput" type="hidden">
+    <div id="${P.ins}:frmDialog:msgDialog"></div>
+    <button type="button" id="${add}"
+      onclick="PrimeFaces.ab({s:&quot;${add}&quot;,p:&quot;${P.ins}:frmDialog&quot;,u:&quot;${P.ins}:frmDialog ${P.ins}:frmDialog:msgDialog @(.dialogIncluirProdutoPadronizadoSelector)&quot;,onco:function(xhr,status,args){$('.ui-dialog-content').scrollTop(0);}});return false;">add</button>
+  </form></div>
+
+  <div class="ui-dialog" id="dlgQry"><form id="${P.qry}:frmDialog">
+    <input id="${P.qry}:frmDialog:produto:produto">
+    <button type="button" id="${qry}"
+      onclick="PrimeFaces.ab({s:&quot;${qry}&quot;,p:&quot;${P.qry}:frmDialog&quot;,u:&quot;${P.qry}:frmDialog ${P.qry}:frmDialog:msgDialog&quot;,onco:function(xhr,status,args){backFirstPage(); resizeDialogQuery();}});return false;">consultar</button>
+    <div class="ui-datatable" id="${P.qry}:frmDialog:pesquisarProdutoPadronizado:datatable_pesquisarProdutoPadronizado">
+      <table><tbody id="${P.qry}:frmDialog:pesquisarProdutoPadronizado:datatable_pesquisarProdutoPadronizado_data" class="ui-datatable-data"></tbody></table>
+      <div class="ui-paginator">
+        <span class="ui-paginator-first ui-state-disabled" onclick="pagB('first')">«</span>
+        <span class="ui-paginator-next" onclick="pagB('next')">›</span>
+        <span class="ui-paginator-last" onclick="pagB('last')">»</span></div></div>
+    <div id="${P.qry}:frmDialog:msgDialog"></div>
+    <button type="button" id="${bnd}" class="ui-state-disabled" disabled="disabled"
+      onclick="PrimeFaces.ab({s:&quot;${bnd}&quot;,u:&quot;${P.qry}:frmDialog:msgDialog @(.dialogPesquisarProdutoPadronizadoSelector)&quot;,onco:function(xhr,status,args){PF('dialogPesquisarProdutoPadronizado').hide();;}});return false;">incluir</button>
+  </form></div>
+
+  <div class="ui-dialog" id="dlgReg"><form id="${P.emp}:frmDialog">
+    <input id="${P.emp}:frmDialog:numeroRegistro:numeroRegistro">
+    <button type="button" id="${eq}"
+      onclick="PrimeFaces.ab({s:&quot;${eq}&quot;,p:&quot;${P.emp}:frmDialog&quot;,u:&quot;${P.emp}:frmDialog ${P.emp}:frmDialog:msgDialog&quot;});return false;">consultar</button>
+    <table><tbody id="${P.emp}:frmDialog:resultado" class="ui-datatable-data"></tbody></table>
+    <button type="button" id="${eb}" class="ui-state-disabled" disabled="disabled"
+      onclick="PrimeFaces.ab({s:&quot;${eb}&quot;,u:&quot;${P.emp}:frmDialog:msgDialog&quot;,onco:function(xhr,status,args){PF('dialogPesquisarRegistro').hide();}});return false;">incluir</button>
+  </form></div>`;
+}
+function habilitar(btnSel) {            // o "rowSelect" do radio (ajax) habilita o botao de confirmar...
+  if (Q.get('bind') === 'nunca') return;  // ?bind=nunca: o botao nunca habilita (testa o fallback pelo ajax direto)
+  setTimeout(() => {                    // ...RE-RENDERIZANDO-O (@(.commandBindSelector)): o no antigo continua desabilitado
+    const b = document.querySelector(btnSel), n = b.cloneNode(true);
+    n.disabled = false; n.removeAttribute('disabled'); n.classList.remove('ui-state-disabled');
+    b.replaceWith(n);
+  }, 400);                              // depois de o ajax ocioso: so quem re-resolve o botao enxerga o novo no
+}
+function selProduto(id, ing) { S.sel = id; S.selIng = ing; habilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`); }
+function selEmpresa(n) { S.empSel = n; habilitar(`[id^="${P.emp}:frmDialog"][id*="commandDialogBind_"]`); }
+function desabilitar(btnSel) { const b = document.querySelector(btnSel); b.disabled = true; b.classList.add('ui-state-disabled'); }
+
+function rkProduto(p) {
+  return `MapaProdutoPadronizadoVO[produto=${p.nome},nomeEspecie=Suíno,nomeGrupo=Suídeos,area=Carne e Derivados,` +
+    `categoria=CAT,unidadeMedida=Quilograma,processoTecnologico=PROC,caracteristica=CAR,nomeIngrediente=${p.ing || 'MIX'},` +
+    `formaConservacao=RESFRIADO(A),isento=N,id=${p.id}]`;
+}
+function renderBusca() {
+  const tb = byId(`${P.qry}:frmDialog:pesquisarProdutoPadronizado:datatable_pesquisarProdutoPadronizado_data`);
+  const ini = S.bPag * RPAGE;
+  tb.innerHTML = S.busca.length
+    ? S.busca.slice(ini, ini + RPAGE).map((p, k) => `<tr data-ri="${ini + k}" data-rk="${rkProduto(p)}"><td><div class="ui-radiobutton-box" onclick="selProduto(${p.id}, '${p.ing || ''}')"></div></td><td>${p.nome}</td></tr>`).join('')
+    : '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="3">Nenhum registro encontrado</td></tr>';
+  const pages = Math.max(1, Math.ceil(S.busca.length / RPAGE)), dlg = byId('dlgQry');
+  dlg.querySelector('.ui-paginator-first').classList.toggle('ui-state-disabled', S.bPag === 0);
+  dlg.querySelector('.ui-paginator-next').classList.toggle('ui-state-disabled', S.bPag >= pages - 1);
+  dlg.querySelector('.ui-paginator-last').classList.toggle('ui-state-disabled', S.bPag >= pages - 1);
+}
+function pagB(w) {
+  if (event.target.classList.contains('ui-state-disabled')) return;
+  const pages = Math.max(1, Math.ceil(S.busca.length / RPAGE));
+  S.bPag = w === 'first' ? 0 : w === 'last' ? pages - 1 : S.bPag + 1;
+  setTimeout(renderBusca, 15);
+}
+
+// ---------- PF stub ----------
+const DLG = { dialogIncluirProdutoPadronizado: 'dlgIns', dialogPesquisarProdutoPadronizado: 'dlgQry', dialogPesquisarRegistro: 'dlgReg' };
+window.PF = function (w) {
+  const id = DLG[w]; if (!id) throw new Error('widget desconhecido ' + w);
+  const e = () => byId(id);
+  return { show() { e().classList.add('open'); }, hide() { e().classList.remove('open'); },
+           jq: { 0: e(), is() { return e().classList.contains('open'); }, find() { return []; } } };
+};
+window.$ = window.$ || function () { return { scrollTop() {} }; };
+window.backFirstPage = function () {}; window.resizeDialogQuery = function () {}; window.resizeDialog = function () {};
+window.PrimeFaces = { ajax: { Queue: { isEmpty: () => pending === 0 } }, widget: {},
+  ab(cfg) {
+    pending++;
+    if (ADD === 'timeout' && /commandDialogAdd_/.test(cfg.s || '')) return;      // nunca responde: pending fica > 0
+    setTimeout(() => {
+      try { handle(cfg); } catch (e) { S.unknown.push('EXC ' + e.message); }
+      pending--;
+      if (cfg.onco) cfg.onco();
+    }, 8);
+  } };
+
+function handle(cfg) {
+  const s = cfg.s || '', known = (re) => re.test(s);
+  S.log.push(s);
+  if (!byId(s)) { S.unknown.push(s); setMsg('error', 'Fonte inexistente: ' + s); return; }
+  if (known(/commandPrepareInsert_/)) { S.view = 'incluir'; S.periodo = ''; S.estab = null; S.estabNome = ''; S.producao = ''; S.produtos = []; S.ingredientes = []; S.pPag = 0; render(); return; }
+  if (known(/:periodoProducaoMascara$/)) {            // so o proprio campo e processado/atualizado
+    const v = val(s); S.periodo = /^(0[1-9]|1[0-2])\/\d{4}$/.test(v) ? v : ''; renderPeriodo(); return;
+  }
+  if (known(/:producao:producao$/)) { S.producao = val(s + '_input'); S.pPag = 0; renderTabela(); return; }
+  if (known(new RegExp(FI + ':' + 'j_idt\\d+$'))) { render(); return; }      // lupa do estabelecimento: u = formulario inteiro, do estado do servidor
+  if (known(new RegExp(P.emp + ':frmDialog:.*commandDialogQuery_'))) {
+    const n = val(`${P.emp}:frmDialog:numeroRegistro:numeroRegistro`);
+    const vazio = Q.get('semsif') === '1' || n === '000';
+    byId(`${P.emp}:frmDialog:resultado`).innerHTML = vazio
+      ? '<tr><td colspan="2">Nenhum registro encontrado</td></tr>'
+      : `<tr data-rk="[id=${n}]"><td><div class="ui-radiobutton-box" onclick="selEmpresa('${n}')"></div></td><td>Estabelecimento ${n}</td></tr>`;
+    desabilitar(`[id^="${P.emp}:frmDialog"][id*="commandDialogBind_"]`);
+    return;
+  }
+  if (known(new RegExp(P.emp + ':frmDialog:.*commandDialogBind_'))) {
+    S.estab = S.empSel; S.estabNome = `EMPRESA ${S.empSel} LTDA`;
+    byId(`${FI}:numeroRegistro`).value = S.estab; byId(`${FI}:nomeEstabelecimento:nomeEstabelecimento`).value = S.estabNome; return;
+  }
+  if (known(/commandInsert_/)) {
+    if (!S.estab) return setMsg('error', 'Informe o estabelecimento');
+    if (!S.periodo) return setMsg('error', 'Informe o período de produção');
+    if (S.producao !== 'S') return setMsg('error', 'Informe se houve produção');
+    if (!S.produtos.length) return setMsg('error', 'Informe ao menos um produto');
+    if (S.registros.some(r => r.estab === S.estab && r.periodo === S.periodo)) return setMsg('error', 'Já existe mapa de produção para este período');
+    S.saved = { estab: S.estab, periodo: S.periodo, producao: S.producao, produtos: S.produtos.map(p => ({ ...p })), ingredientes: S.ingredientes.slice() };
+    S.registros.push(S.saved); S.view = 'consulta'; setMsg('info', 'Registro incluído com sucesso.'); render(); return;
+  }
+  if (known(new RegExp(FI + ':producaoProdutosPoa:j_idt\\d+$'))) {          // "Novo": re-renderiza os formularios dos dialogos
+    for (const id of [`${P.ins}:frmDialog:produto:produto`, `${P.ins}:frmDialog:quantidade_input`, `${P.ins}:frmDialog:quantidade_hinput`, `${P.qry}:frmDialog:produto:produto`]) byId(id).value = '';
+    byId(`${P.qry}:frmDialog:pesquisarProdutoPadronizado:datatable_pesquisarProdutoPadronizado_data`).innerHTML = '';
+    desabilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`);
+    S.busca = []; S.prodBound = null; S.sel = null; setMsg('', ''); return;
+  }
+  if (known(/commandSearch_produto$/)) return;
+  if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogQuery_'))) {
+    const termo = val(`${P.qry}:frmDialog:produto:produto`).toLowerCase();
+    S.busca = CATALOGO.filter(p => p.nome.toLowerCase().includes(termo)); S.bPag = 0; S.sel = null;
+    desabilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`); renderBusca(); return;
+  }
+  if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogBind_'))) {
+    if (!S.sel) return;
+    S.prodBound = S.sel; S.boundIng = S.selIng; byId(`${P.ins}:frmDialog:produto:produto`).value = CATALOGO.find(p => p.id === S.sel).nome; return;
+  }
+  if (known(new RegExp(P.ins + ':frmDialog:.*commandDialogAdd_'))) {
+    const q = Number(val(`${P.ins}:frmDialog:quantidade_hinput`));
+    if (!S.prodBound) return setMsg('error', 'Produto obrigatório');
+    if (!(q > 0)) return setMsg('error', 'Quantidade inválida');
+    S.produtos.push({ id: S.prodBound, qtd: q }); S.ingredientes.push(S.boundIng || ''); S.prodBound = null; S.pPag = 0;
+    byId('dlgIns').classList.remove('open'); renderTabela(); return;
+  }
+  S.unknown.push('SEM_HANDLER ' + s);
+}
+
+window.__seed = function (regs) { S.registros = regs; render(); };
+buildDialogs(); render();
+</script>
+</body></html>

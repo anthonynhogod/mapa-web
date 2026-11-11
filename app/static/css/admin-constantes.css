@@ -1,0 +1,130 @@
+/* Admin > Constantes — abas, barra de ferramentas, tabela e formulário.
+   Usa só as variáveis do tema (style.css), então acompanha claro/escuro. */
+
+.cst { width: 100%; min-width: 0; contain: inline-size; --cst-tint: color-mix(in srgb, var(--brand-500) 10%, transparent);
+       --cst-tint-strong: color-mix(in srgb, var(--brand-500) 18%, transparent); }
+
+/* ---------- abas agrupadas ---------- */
+.cst-tabs { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: flex-end;
+            padding-bottom: 12px; margin-bottom: 18px; border-bottom: 1px solid var(--border); }
+.cst-grupo { display: flex; flex-direction: column; gap: 4px; }
+.cst-grupo__rotulo { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase;
+                     color: var(--muted); font-weight: 700; padding-left: 4px; }
+.cst-grupo__abas { display: flex; flex-wrap: wrap; gap: 6px; }
+.cst-tab { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
+           border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+           color: var(--text); font-size: .88rem; font-weight: 600; text-decoration: none;
+           box-shadow: none; transition: background-color .15s, border-color .15s; }
+.cst-tab:hover { background: var(--cst-tint); border-color: var(--brand-300); text-decoration: none; }
+.cst-tab.is-ativa { background: var(--brand-500); border-color: var(--brand-500); color: #fff; }
+.cst-tab__n { font-size: .72rem; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+              background: var(--cst-tint-strong); color: var(--brand-600); }
+.cst-tab.is-ativa .cst-tab__n { background: rgba(255,255,255,.22); color: #fff; }
+
+/* ---------- cabeçalho da seção ---------- */
+.cst-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+           flex-wrap: wrap; margin-bottom: 14px; }
+.cst-cab h2 { margin: 0; font-size: 1.35rem; color: var(--text); }
+.cst-cab p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; max-width: 70ch; }
+.cst-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: var(--radius-sm);
+           background: var(--brand-500); border: 1px solid var(--brand-500); color: #fff; font-weight: 600;
+           font-size: .9rem; text-decoration: none; cursor: pointer; }
+.cst-btn:hover { background: var(--brand-600); text-decoration: none; color: #fff; }
+.cst-btn--sec { background: transparent; color: var(--brand-600); border-color: var(--brand-400); box-shadow: none; }
+.cst-btn--sec:hover { background: var(--cst-tint); color: var(--brand-600); }
+.cst-btn--perigo { background: transparent; color: var(--danger); border-color: var(--danger); box-shadow: none; }
+.cst-btn--perigo:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+.cst-btn--mini { padding: 4px 10px; font-size: .8rem; }
+
+/* ---------- barra de ferramentas ---------- */
+.cst-barra { display: flex !important; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.cst-busca { position: relative; flex: 1 1 260px; max-width: 420px; }
+.cst-busca input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--border-strong);
+                   border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: .92rem; }
+.cst-busca input:focus { outline: 2px solid var(--focus); outline-offset: 0; }
+.cst-busca i { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: .85rem; }
+.cst-barra select { width: auto; flex: 0 0 auto; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+                    background: var(--surface); color: var(--text); font-size: .9rem; }
+.cst-barra .cst-btn { flex: 0 0 auto; width: auto; }
+.cst-total { margin-left: auto; color: var(--muted); font-size: .85rem; }
+
+/* ---------- tabela ---------- */
+.cst-cartao { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+              box-shadow: var(--shadow-sm); overflow: hidden; }
+.cst-rolagem { max-height: 68vh; overflow: auto; }
+.cst-tabela { width: 100%; border-collapse: collapse; font-size: .92rem; margin: 0; }
+.cst-tabela th { position: sticky; top: 0; z-index: 2; text-align: left; padding: 10px 14px;
+                 background: var(--surface-2, var(--cst-tint)); color: var(--muted); font-size: .72rem;
+                 letter-spacing: .06em; text-transform: uppercase; font-weight: 700;
+                 border-bottom: 1px solid var(--border-strong); white-space: nowrap; }
+.cst-tabela td { padding: 10px 14px; border-bottom: 1px solid var(--border); text-align: left;
+                 vertical-align: middle; text-align-last: auto; }
+.cst-tabela tbody tr:nth-child(even) { background: transparent; }
+.cst-tabela tbody tr:hover { background: var(--cst-tint); }
+.cst-tabela tbody tr:last-child td { border-bottom: 0; }
+.cst-tabela .c-id { width: 1%; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cst-tabela .c-nome { font-weight: 500; color: var(--text); min-width: 180px; }
+.cst-tabela .c-num { width: 1%; white-space: nowrap; }
+.cst-tabela .c-acoes { width: 1%; white-space: nowrap; text-align: right; }
+.cst-tabela td:last-child { width: auto; }
+.cst-tabela td.c-acoes { width: 1%; }
+.cst-tabela tr.is-inativa td { opacity: .55; }
+
+/* chips e etiquetas */
+.cst-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.cst-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px;
+            background: var(--cst-tint); color: var(--text); font-size: .78rem; border: 1px solid var(--border); }
+.cst-chip--mais { color: var(--muted); }
+.cst-chip form { display: inline; margin: 0; }
+.cst-chip button { all: unset; cursor: pointer; color: var(--muted); font-weight: 700; padding: 0 2px; line-height: 1; }
+.cst-chip button:hover { color: var(--danger); }
+.cst-vazio { color: var(--muted); }
+.cst-id { display: inline-block; min-width: 2.2em; text-align: center; padding: 2px 8px; border-radius: 6px;
+          background: var(--cst-tint); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: .82rem; color: var(--text); }
+.cst-id--falta { background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--text); }
+.cst-status { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; }
+.cst-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+.cst-status--off { color: var(--muted); }
+.cst-status--off::before { background: var(--muted); }
+.cst-nota { margin-top: 12px; color: var(--muted); font-size: .85rem; max-width: 80ch; }
+.cst-vazio-bloco { padding: 36px 16px; text-align: center; color: var(--muted); }
+
+/* ---------- formulário ---------- */
+.cst-form { display: grid; gap: 16px; max-width: 760px; }
+.cst-campo { display: flex; flex-direction: column; gap: 5px; }
+.cst-campo label { font-size: .85rem; font-weight: 600; color: var(--text); }
+.cst-campo input, .cst-campo select { padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+                                      background: var(--surface); color: var(--text); font-size: .95rem; width: 100%; }
+.cst-campo input:focus, .cst-campo select:focus { outline: 2px solid var(--focus); outline-offset: 0; }
+.cst-campo input[readonly] { background: var(--cst-tint); color: var(--muted); }
+.cst-campo small { color: var(--muted); font-size: .8rem; }
+.cst-par { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.cst-acoes-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+.cst-secao { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); }
+.cst-secao h3 { margin: 0 0 6px; font-size: 1.05rem; color: var(--text); }
+.cst-novo-alias { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.cst-novo-alias input { flex: 1 1 240px; padding: 8px 12px; border: 1px solid var(--border-strong);
+                        border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.cst-inline input[type=text], .cst-inline select { padding: 6px 8px; border: 1px solid var(--border-strong);
+                                                   border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+
+@media (max-width: 720px) {
+  .cst-cab { flex-direction: column; }
+  .cst-busca { max-width: none; }
+}
+
+/* colunas de texto quebram linha em vez de alargar a tabela além do cartão */
+.cst-tabela td:not(.c-num):not(.c-id):not(.c-acoes) { max-width: 260px; overflow-wrap: anywhere; }
+.cst-tabela th, .cst-tabela td { padding-left: 12px; padding-right: 12px; }
+.cst-tabela .c-nome { min-width: 150px; }
+
+/* tema escuro: o style.css global recolore links/botões; reafirma contraste do módulo */
+html[data-theme="dark"] .cst-tab { color: var(--text); }
+html[data-theme="dark"] .cst-tab.is-ativa { color: #fff; }
+html[data-theme="dark"] .cst-tab__n { color: var(--text); }
+html[data-theme="dark"] .cst-btn { color: #fff; }
+html[data-theme="dark"] .cst-btn--sec { color: var(--accent, #6da4ff); border-color: var(--border-strong); background: transparent; }
+html[data-theme="dark"] .cst-btn--sec:hover { background: var(--cst-tint); color: #fff; }
+html[data-theme="dark"] .cst-btn--perigo { color: #ff8a8a; border-color: #ff8a8a; background: transparent; }
+html[data-theme="dark"] .cst-tabela th { background: color-mix(in srgb, var(--brand-500) 14%, var(--surface)); color: var(--text-soft, var(--muted)); }

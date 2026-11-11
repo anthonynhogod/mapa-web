@@ -1,0 +1,16 @@
+{% extends "admin/layout.html" %}
+{% block title %}Admin — Catálogo {{ nome }}{% endblock %}
+{% block content %}
+<h2 class="titulo-form">Catálogo “{{ nome }}” — ambiente {{ ambiente }}</h2>
+<p><a class="btn btn--outline btn--table" href="{{ url_for('admin.api_mapa') }}">Voltar</a></p>
+<div class="table-scroll">
+  <table class="tabela-registros">
+    <thead><tr><th>ID (detectado)</th><th>Nome (detectado)</th><th>Registro cru</th></tr></thead>
+    <tbody>
+      {% for l in linhas %}
+      <tr><td>{{ l.id if l.id is not none else '—' }}</td><td>{{ l.nome or '—' }}</td><td><code>{{ l.cru }}</code></td></tr>
+      {% else %}<tr><td colspan="3">Vazio.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

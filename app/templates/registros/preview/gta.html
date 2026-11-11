@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_macros/pagination.html" import render_pagination_numeric %}
+{% block title %}Preview GTA — Registro {{ registro.id }}{% endblock %}
+
+{% block main %}
+<div class="painel">
+  <h2 class="titulo-form">
+    GTA — Registro {{ registro.id }} <small class="blue">({{ source }})</small>
+  </h2>
+
+  <!-- Mini-resumo -->
+  <div class="mini-painel">
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ resumo.total_animais }}</span></div>
+      <div class="texto-painel">Animais</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ resumo.machos_total }}</span></div>
+      <div class="texto-painel">Machos</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><span class="numero-circulo">{{ resumo.femeas_total }}</span></div>
+      <div class="texto-painel">Fêmeas</div>
+    </div>
+  </div>
+
+  <!-- Avisos / Erros -->
+  {% set warns = meta.get('warnings', []) %}
+  {% set errs = meta.get('errors', []) %}
+  {% set cnt = meta.get('counts', {}) %}
+  {% if warns or errs %}
+  <div class="flash {% if errs %}flash--error{% else %}flash--warning{% endif %}">
+    <strong>{{ 'Erros' if errs else 'Avisos' }}</strong> detectados.
+    <details style="margin-top:8px;">
+      <summary>Ver detalhes</summary>
+      {% if errs %}
+      <ul>
+        {% for e in errs %}
+        <li>[{{ e.level or 'error' }}] <code>{{ e.where or '-' }}</code> — {{ e.message or '' }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if warns %}
+      <ul>
+        {% for w in warns %}
+        <li>[{{ w.level or 'warning' }}] <code>{{ w.where or '-' }}</code> — {{ w.message or '' }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <code>
+          input={{ cnt.input_rows or 0 }},
+          filtradas={{ cnt.filtered_rows or 0 }},
+          válidas={{ cnt.valid_rows or 0 }},
+          saída={{ cnt.output_records or 0 }}
+        </code>
+    </details>
+  </div>
+  {% endif %}
+
+  <!-- Tabela -->
+  <div class="preview-body">
+    <div class="table-scroll">
+      <table class="tabela-registros">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Nº GTA</th>
+            <th>Série</th>
+            <th>Machos</th>
+            <th>Fêmeas</th>
+            <th>Total</th>
+            <th>Lote</th>
+            <th>Peso médio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in records %}
+          <tr>
+            <td>{{ r.get('data') or '—' }}</td>
+            <td>{{ r.get('numero_gta') }}</td>
+            <td>{{ r.get('serie') }}</td>
+            <td>{{ r.get('machos') }}</td>
+            <td>{{ r.get('femeas') }}</td>
+            <td><strong>{{ r.get('total') }}</strong></td>
+            <td>{{ r.get('lote') }}</td>
+            <td>{{ r.get('peso_medio') }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="paginator">{{ render_pagination_numeric(pagination) }}</div>
+    <!-- Ações principais -->
+    <div class="form-actions" style="justify-content:flex-start; gap:8px; margin-top:16px;">
+      <a class="btn btn--outline" href="{{ url_for('registros.incluir_dados', registro_id=registro.id) }}">
+        ← Voltar para inclusão
+      </a>
+      <a class="btn btn--outline" href="{{ url_for('registros.preview_registro', registro_id=registro.id) }}">
+        Ver resumo geral
+      </a>
+    </div>
+  </div>
+  <!-- JSON bruto -->
+</div>
+{% endblock %}

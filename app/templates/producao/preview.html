@@ -1,0 +1,94 @@
+{% extends "layout.html" %}
+{% block title %}Preview Produção{% endblock %}
+{% block mini_painel %}{% endblock %}
+{% block content %}
+<div class="preview-panel">
+  <h2 class="titulo-form">Preview — Produção {{ competencia }}</h2>
+
+  <div class="mini-painel">
+    <div class="mini-painel-item">
+      <div class="circulo-info"><div class="numero-circulo">{{ totais.itens }}</div></div>
+      <div class="texto-painel">Produtos lançados</div>
+    </div>
+    <div class="mini-painel-item">
+      <div class="circulo-info"><div class="numero-circulo">{{ '{:,.2f}'.format(totais.quantidade).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div>
+      <div class="texto-painel">Quantidade total</div>
+    </div>
+  </div>
+
+  <div class="alert" style="margin-top:12px;">
+    <div class="alert__icon">ℹ️</div>
+    <div class="alert__content">
+      Arquivo: <strong>{{ tmp.filename }}</strong>
+      {% if meta.empresa %}— {{ meta.empresa }}{% endif %}.
+      O mapa de produção de <strong>{{ competencia }}</strong> é criado no portal e só é salvo no último passo.
+      Este módulo ainda <strong>não consulta</strong> se o portal já tem um mapa desse mês: confira antes de confirmar.
+      Espera-se que o portal recuse o salvamento duplicado, mas isso ainda não foi verificado.
+      {% if meta.competencia and meta.competencia.origem %}Mês obtido das {{ meta.competencia.origem }}.{% endif %}
+      {% for w in meta.warnings %}
+      <div class="msg-erro" style="margin-top:6px;">Aviso: {{ w.where }} — {{ w.message }}</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if bloqueios %}
+  <div class="alert alert--danger">
+    <div class="alert__icon">⛔</div>
+    <div class="alert__content"><strong>Este lançamento não pode ser enviado:</strong>
+      <ul class="lista-motivos">{% for m in bloqueios %}<li>{{ m }}</li>{% endfor %}</ul>
+      <a class="btn btn--sm btn--outline" href="{{ url_for('public.credenciais_mapa') }}">Ir para Credenciais MAPA</a>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="tabs">
+    <button class="tab-btn active" type="button" onclick="showTab('tab-produtos', this)">Produtos</button>
+    <button class="tab-btn" type="button" onclick="showTab('tab-commands', this)">Comandos</button>
+  </div>
+
+  <div class="preview-body">
+    <div id="tab-produtos" class="tab-pane active">
+      <div class="table-scroll">
+        <table class="tabela-registros">
+          <thead>
+            <tr><th>Produto (planilha)</th><th>Descrição no MAPA</th><th>ID MAPA</th><th>Ingrediente</th><th>Quantidade</th></tr>
+          </thead>
+          <tbody>
+            {% for i in plano %}
+            <tr>
+              <td>{{ i.produto }}</td>
+              <td>{{ i.descricao }}</td>
+              <td>{{ i.id }}</td>
+              <td>{{ i.ingrediente or "—" }}</td>
+              <td>{{ '%.2f'|format(i.quantidade) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tab-commands" class="tab-pane">
+      <div class="table-scroll">
+        <pre style="white-space: pre-wrap; background: var(--surface-2); border:1px solid var(--border); padding:12px; border-radius:10px;">
+{% for c in comandos %}{{ c }}
+{% endfor %}
+        </pre>
+      </div>
+    </div>
+
+    <form action="{{ url_for('producao.finalizar', registro_id=registro.id) }}" method="post">
+      <button class="btn" type="submit" {{ 'disabled title="Resolva os bloqueios acima"' if bloqueios else '' }}>Confirmar &amp; Executar</button>
+      <a class="btn btn--outline" href="{{ url_for('producao.novo') }}">Enviar outra planilha</a>
+    </form>
+  </div>
+</div>
+<script>
+  function showTab(id, el) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+  }
+</script>
+{% endblock %}
