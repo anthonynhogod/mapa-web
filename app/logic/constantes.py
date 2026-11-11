@@ -289,20 +289,22 @@ def _mapa_produtos_producao():
                 db.session.query(
                     ProdutoProducaoAlias.alias_norm,
                     ProdutoProducao.descricao_busca, ProdutoProducao.id_mapa, ProdutoProducao.nome,
+                    ProdutoProducao.ingrediente,
                 )
                 .join(ProdutoProducao, ProdutoProducaoAlias.produto_id == ProdutoProducao.id)
                 .filter(ProdutoProducao.ativo.is_(True))
                 .all()
             )
             _cache["produto_producao"] = {
-                norm: {"descricao": descr, "id": int(idm) if idm is not None else None, "nome": nome}
-                for norm, descr, idm, nome in rows
+                norm: {"descricao": descr, "id": int(idm) if idm is not None else None, "nome": nome,
+                       "ingrediente": (ing or "").strip() or None}
+                for norm, descr, idm, nome, ing in rows
             }
         return _cache["produto_producao"]
 
 
 def resolve_produto_producao(nome: str, coletor: ColetorPendencias = None):
-    """Produto da planilha de producao -> {"descricao", "id", "nome"} do portal. Sem vinculo -> pendencia."""
+    """Produto da planilha de producao -> {"descricao", "id", "nome", "ingrediente"} do portal. Sem vinculo -> pendencia."""
     valor = _mapa_produtos_producao().get(normalize_str(nome or ""))
     if valor is not None:
         return valor

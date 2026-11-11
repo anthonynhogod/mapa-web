@@ -23,8 +23,8 @@ def _modo_navegador(app):
     app.config["EXEC_BACKEND"] = "api"      # a producao nao pode ir pela API, mesmo com o sistema neste modo
 
 
-def _produto(nome, descricao, id_mapa, *aliases):
-    p = ProdutoProducao(nome=nome, descricao_busca=descricao, id_mapa=id_mapa)
+def _produto(nome, descricao, id_mapa, *aliases, ingrediente=None):
+    p = ProdutoProducao(nome=nome, descricao_busca=descricao, id_mapa=id_mapa, ingrediente=ingrediente)
     db.session.add(p)
     db.session.flush()
     for a in (nome, *aliases):
@@ -55,8 +55,8 @@ def test_plano_resolve_de_para_e_gera_comandos(app):
     cmds = build_commands(plano, competencia="09/2026", numero_sif="167")
     assert cmds == [
         'abrirInclusaoProducao("09/2026", "167")',
-        'incluirProdutoProducao("APRESUNTADO", 17176, 300.5)',
-        'incluirProdutoProducao("BACON", 17189, 15.26)',
+        'incluirProdutoProducao("APRESUNTADO", 17176, 300.5, "")',
+        'incluirProdutoProducao("BACON", 17189, 15.26, "")',
         'finalizarRegistroProducao("09/2026", 2)',
     ]
     assert totais(plano) == {"itens": 2, "quantidade": 315.76}
@@ -70,10 +70,37 @@ def test_produtos_com_o_mesmo_id_do_portal_continuam_lancamentos_separados(app):
     assert [(i["produto"], i["id"], i["quantidade"]) for i in plano] == [
         ("MIUDOS SALGADOS", 18321, 10.1), ("MIUDOS SALGADOS (MASCARA)", 18321, 0.25)]
     cmds = build_commands(plano, competencia="09/2026", numero_sif="167")
-    assert cmds[1:3] == ['incluirProdutoProducao("MIUDOS SALGADOS", 18321, 10.1)',
-                         'incluirProdutoProducao("MIUDOS SALGADOS", 18321, 0.25)']
+    assert cmds[1:3] == ['incluirProdutoProducao("MIUDOS SALGADOS", 18321, 10.1, "")',
+                         'incluirProdutoProducao("MIUDOS SALGADOS", 18321, 0.25, "")']
     assert cmds[-1] == 'finalizarRegistroProducao("09/2026", 2)'
     assert totais(plano) == {"itens": 2, "quantidade": 10.35}
+
+
+def test_ingrediente_vai_no_plano_e_no_comando(app):
+    _produto("RESIDUOS DE ABATE", "RESIDUOS DE ABATE DE SUINO", 18538, ingrediente="Único")
+    _produto("PELE", "PELE", 18600)
+    plano = build_plano([{"produto": "RESIDUOS DE ABATE", "quantidade": 5}, {"produto": "PELE", "quantidade": 1}])
+    assert [(i["id"], i["ingrediente"]) for i in plano] == [(18600, None), (18538, "Único")] or \
+           [(i["id"], i["ingrediente"]) for i in plano] == [(18538, "Único"), (18600, None)]
+    cmds = build_commands(plano, competencia="09/2026", numero_sif="167")
+    assert 'incluirProdutoProducao("RESIDUOS DE ABATE DE SUINO", 18538, 5, "Único")' in cmds
+    assert 'incluirProdutoProducao("PELE", 18600, 1, "")' in cmds
+
+
+def test_admin_define_ingrediente_e_recusa_valor_fora_das_opcoes(app, client):
+    _usuario("adm", admin=True); _login(client, "adm")
+    dados = {"nome": "RESIDUOS", "ativo": "1", "id_mapa": "18538", "descricao_busca": "RESIDUOS DE ABATE DE SUINO"}
+    assert client.post("/admin/constantes/produtos-producao/novo", data={**dados, "ingrediente": "Qualquer"}).status_code == 302
+    assert ProdutoProducao.query.count() == 0
+    client.post("/admin/constantes/produtos-producao/novo", data={**dados, "ingrediente": "Único"})
+    p = ProdutoProducao.query.one()
+    assert p.ingrediente == "Único"
+    assert build_plano([{"produto": "RESIDUOS", "quantidade": 1}])[0]["ingrediente"] == "Único"
+    html = client.get(f"/admin/constantes/produtos-producao/{p.id}/editar").get_data(as_text=True)
+    assert '<option value="Único" selected>' in html and "MIX" in html
+    client.post(f"/admin/constantes/produtos-producao/{p.id}/editar", data={**dados, "ingrediente": ""})
+    db.session.expire_all()
+    assert ProdutoProducao.query.one().ingrediente is None
 
 
 def test_sem_vinculo_vira_pendencia_e_sem_coletor_levanta(app):
@@ -278,8 +305,8 @@ def test_retry_reconstroi_comandos_com_o_de_para_atual(app):
     assert job.status == "ESPERA" and db.session.get(Registro, reg_id).status == "PT"
     assert job.commands == [
         'abrirInclusaoProducao("09/2026", "167")',
-        'incluirProdutoProducao("APRESUNTADO", 17176, 300.5)',
-        'incluirProdutoProducao("BACON", 99999, 15.26)',
+        'incluirProdutoProducao("APRESUNTADO", 17176, 300.5, "")',
+        'incluirProdutoProducao("BACON", 99999, 15.26, "")',
         'finalizarRegistroProducao("09/2026", 2)',
     ]
     assert job.meta["totais"]["itens"] == 2
@@ -391,7 +418,13 @@ def test_migration_cria_e_remove_as_tabelas_de_para_da_producao(app):
     upgrade(revision="a9d3e5f7b1c2")
     insp = inspect(db.engine)
     assert {"nome", "descricao_busca", "id_mapa", "ativo"} <= {c["name"] for c in insp.get_columns("produto_producao")}
+    assert "ingrediente" not in {c["name"] for c in insp.get_columns("produto_producao")}
+    upgrade(revision="b7e1c4d9a2f6")
+    assert "ingrediente" in {c["name"] for c in inspect(db.engine).get_columns("produto_producao")}
+    downgrade(revision="a9d3e5f7b1c2")
+    assert "ingrediente" not in {c["name"] for c in inspect(db.engine).get_columns("produto_producao")}
+    upgrade(revision="b7e1c4d9a2f6")
     assert {"produto_id", "alias", "alias_norm"} <= {c["name"] for c in insp.get_columns("produto_producao_alias")}
     downgrade(revision="f7a1c9d3b5e2")
     assert "produto_producao" not in inspect(db.engine).get_table_names()
-    upgrade(revision="a9d3e5f7b1c2")          # deixa o schema como o teardown espera
+    upgrade(revision="b7e1c4d9a2f6")          # deixa o schema como o teardown espera

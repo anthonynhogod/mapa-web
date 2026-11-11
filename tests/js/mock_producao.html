@@ -34,12 +34,13 @@ const CATALOGO = [
   {id: 17176, nome: 'APRESUNTADO'}, {id: 1717, nome: 'APRESUNTADO ANTIGO'}, {id: 17178, nome: 'APRESUNTADO COZIDO'},
   {id: 17175, nome: 'APRESUNTADO FATIADO'}, {id: 17189, nome: 'BACON'}, {id: 17186, nome: 'BACON FATIADO'},
   {id: 18152, nome: 'LINGUICA FRESCAL'}, {id: 18321, nome: 'MIUDOS SALGADOS'},
+  {id: 18538, nome: 'RESIDUOS DE ABATE', ing: 'MIX'}, {id: 18538, nome: 'RESIDUOS DE ABATE', ing: 'Único'},
 ];
 
 // ---------- "servidor" ----------
 const S = window.__server = {
   view: 'consulta', registros: [], periodo: '', estab: null, estabNome: '', producao: '',
-  produtos: [], pPag: 0, busca: [], bPag: 0, sel: null, empSel: null, prodBound: null,
+  produtos: [], ingredientes: [], pPag: 0, busca: [], bPag: 0, sel: null, empSel: null, prodBound: null,
   saved: null, unknown: [], log: [],
 };
 let pending = 0;
@@ -171,20 +172,20 @@ function habilitar(btnSel) {            // o "rowSelect" do radio (ajax) habilit
     b.replaceWith(n);
   }, 400);                              // depois de o ajax ocioso: so quem re-resolve o botao enxerga o novo no
 }
-function selProduto(id) { S.sel = id; habilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`); }
+function selProduto(id, ing) { S.sel = id; S.selIng = ing; habilitar(`[id^="${P.qry}:frmDialog"][id*="commandDialogBind_"]`); }
 function selEmpresa(n) { S.empSel = n; habilitar(`[id^="${P.emp}:frmDialog"][id*="commandDialogBind_"]`); }
 function desabilitar(btnSel) { const b = document.querySelector(btnSel); b.disabled = true; b.classList.add('ui-state-disabled'); }
 
 function rkProduto(p) {
   return `MapaProdutoPadronizadoVO[produto=${p.nome},nomeEspecie=Suíno,nomeGrupo=Suídeos,area=Carne e Derivados,` +
-    `categoria=CAT,unidadeMedida=Quilograma,processoTecnologico=PROC,caracteristica=CAR,nomeIngrediente=MIX,` +
+    `categoria=CAT,unidadeMedida=Quilograma,processoTecnologico=PROC,caracteristica=CAR,nomeIngrediente=${p.ing || 'MIX'},` +
     `formaConservacao=RESFRIADO(A),isento=N,id=${p.id}]`;
 }
 function renderBusca() {
   const tb = byId(`${P.qry}:frmDialog:pesquisarProdutoPadronizado:datatable_pesquisarProdutoPadronizado_data`);
   const ini = S.bPag * RPAGE;
   tb.innerHTML = S.busca.length
-    ? S.busca.slice(ini, ini + RPAGE).map((p, k) => `<tr data-ri="${ini + k}" data-rk="${rkProduto(p)}"><td><div class="ui-radiobutton-box" onclick="selProduto(${p.id})"></div></td><td>${p.nome}</td></tr>`).join('')
+    ? S.busca.slice(ini, ini + RPAGE).map((p, k) => `<tr data-ri="${ini + k}" data-rk="${rkProduto(p)}"><td><div class="ui-radiobutton-box" onclick="selProduto(${p.id}, '${p.ing || ''}')"></div></td><td>${p.nome}</td></tr>`).join('')
     : '<tr class="ui-widget-content ui-datatable-empty-message"><td colspan="3">Nenhum registro encontrado</td></tr>';
   const pages = Math.max(1, Math.ceil(S.busca.length / RPAGE)), dlg = byId('dlgQry');
   dlg.querySelector('.ui-paginator-first').classList.toggle('ui-state-disabled', S.bPag === 0);
@@ -223,7 +224,7 @@ function handle(cfg) {
   const s = cfg.s || '', known = (re) => re.test(s);
   S.log.push(s);
   if (!byId(s)) { S.unknown.push(s); setMsg('error', 'Fonte inexistente: ' + s); return; }
-  if (known(/commandPrepareInsert_/)) { S.view = 'incluir'; S.periodo = ''; S.estab = null; S.estabNome = ''; S.producao = ''; S.produtos = []; S.pPag = 0; render(); return; }
+  if (known(/commandPrepareInsert_/)) { S.view = 'incluir'; S.periodo = ''; S.estab = null; S.estabNome = ''; S.producao = ''; S.produtos = []; S.ingredientes = []; S.pPag = 0; render(); return; }
   if (known(/:periodoProducaoMascara$/)) {            // so o proprio campo e processado/atualizado
     const v = val(s); S.periodo = /^(0[1-9]|1[0-2])\/\d{4}$/.test(v) ? v : ''; renderPeriodo(); return;
   }
@@ -248,7 +249,7 @@ function handle(cfg) {
     if (S.producao !== 'S') return setMsg('error', 'Informe se houve produção');
     if (!S.produtos.length) return setMsg('error', 'Informe ao menos um produto');
     if (S.registros.some(r => r.estab === S.estab && r.periodo === S.periodo)) return setMsg('error', 'Já existe mapa de produção para este período');
-    S.saved = { estab: S.estab, periodo: S.periodo, producao: S.producao, produtos: S.produtos.map(p => ({ ...p })) };
+    S.saved = { estab: S.estab, periodo: S.periodo, producao: S.producao, produtos: S.produtos.map(p => ({ ...p })), ingredientes: S.ingredientes.slice() };
     S.registros.push(S.saved); S.view = 'consulta'; setMsg('info', 'Registro incluído com sucesso.'); render(); return;
   }
   if (known(new RegExp(FI + ':producaoProdutosPoa:j_idt\\d+$'))) {          // "Novo": re-renderiza os formularios dos dialogos
@@ -265,13 +266,13 @@ function handle(cfg) {
   }
   if (known(new RegExp(P.qry + ':frmDialog:.*commandDialogBind_'))) {
     if (!S.sel) return;
-    S.prodBound = S.sel; byId(`${P.ins}:frmDialog:produto:produto`).value = CATALOGO.find(p => p.id === S.sel).nome; return;
+    S.prodBound = S.sel; S.boundIng = S.selIng; byId(`${P.ins}:frmDialog:produto:produto`).value = CATALOGO.find(p => p.id === S.sel).nome; return;
   }
   if (known(new RegExp(P.ins + ':frmDialog:.*commandDialogAdd_'))) {
     const q = Number(val(`${P.ins}:frmDialog:quantidade_hinput`));
     if (!S.prodBound) return setMsg('error', 'Produto obrigatório');
     if (!(q > 0)) return setMsg('error', 'Quantidade inválida');
-    S.produtos.push({ id: S.prodBound, qtd: q }); S.prodBound = null; S.pPag = 0;
+    S.produtos.push({ id: S.prodBound, qtd: q }); S.ingredientes.push(S.boundIng || ''); S.prodBound = null; S.pPag = 0;
     byId('dlgIns').classList.remove('open'); renderTabela(); return;
   }
   S.unknown.push('SEM_HANDLER ' + s);

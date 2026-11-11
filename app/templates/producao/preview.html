@@ -51,7 +51,7 @@
       <div class="table-scroll">
         <table class="tabela-registros">
           <thead>
-            <tr><th>Produto (planilha)</th><th>Descrição no MAPA</th><th>ID MAPA</th><th>Quantidade</th></tr>
+            <tr><th>Produto (planilha)</th><th>Descrição no MAPA</th><th>ID MAPA</th><th>Ingrediente</th><th>Quantidade</th></tr>
           </thead>
           <tbody>
             {% for i in plano %}
@@ -59,6 +59,7 @@
               <td>{{ i.produto }}</td>
               <td>{{ i.descricao }}</td>
               <td>{{ i.id }}</td>
+              <td>{{ i.ingrediente or "—" }}</td>
               <td>{{ '%.2f'|format(i.quantidade) }}</td>
             </tr>
             {% endfor %}

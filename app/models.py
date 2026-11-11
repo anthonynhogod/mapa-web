@@ -636,13 +636,17 @@ class ProdutoProducao(_ConstMixin, db.Model):
       - 'nome'           : grafia na planilha (ex.: 'APRESUNTADO RESFRIADO')
       - 'descricao_busca': texto digitado no campo de busca do produto padronizado
       - 'id_mapa'        : id do produto no portal (casa com o 'id=NNN' do data-rk da linha encontrada)
-    Produtos diferentes PODEM apontar para o mesmo id_mapa; no plano as quantidades sao somadas por id.
+    Produtos diferentes PODEM apontar para o mesmo id_mapa; cada um continua sendo um lancamento separado.
+      - 'ingrediente'    : o portal pode devolver DUAS linhas com o mesmo id e "nomeIngrediente" diferente (MIX / Único);
+                           quando preenchido, so a linha com esse ingrediente e selecionada.
     """
     __tablename__ = "produto_producao"
 
     nome = db.Column(db.String(160), nullable=False, unique=True)
     descricao_busca = db.Column(db.String(180), nullable=False)
     id_mapa = db.Column(db.Integer, nullable=True)
+    # "nomeIngrediente" da linha escolhida na busca (MIX | Único). Vazio = a primeira linha com o id.
+    ingrediente = db.Column(db.String(20), nullable=True)
 
     aliases = relationship(
         "ProdutoProducaoAlias",

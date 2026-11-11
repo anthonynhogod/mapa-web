@@ -22,7 +22,7 @@ FINALIZAR_CMD = "finalizarRegistroProducao"
 
 def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendencias] = None) -> List[Dict[str, Any]]:
     """
-    [{"produto", "id", "descricao", "quantidade"}]  (um item por produto da planilha, ordenado por produto)
+    [{"produto", "id", "descricao", "ingrediente", "quantidade"}]  (um item por produto da planilha, ordenado por produto)
 
     Cada produto da planilha e um lancamento UNICO no portal, mesmo quando varios apontam para o mesmo id
     (ex.: "MIUDOS SALGADOS" e "MIUDOS SALGADOS (MASCARA)"): o Ministerio exige lancamentos separados, entao
@@ -42,7 +42,8 @@ def build_plano(records: List[Dict[str, Any]], coletor: Optional[ColetorPendenci
         qtd = round(float(r.get("quantidade") or 0), 2)
         if qtd <= 0:
             continue
-        itens.append({"produto": r.get("produto"), "id": prod["id"], "descricao": prod["descricao"], "quantidade": qtd})
+        itens.append({"produto": r.get("produto"), "id": prod["id"], "descricao": prod["descricao"],
+                      "ingrediente": prod.get("ingrediente"), "quantidade": qtd})
     return itens
 
 
@@ -53,7 +54,8 @@ def build_commands(plano: List[Dict[str, Any]], *, competencia: str, numero_sif:
     """
     cmds = [f"{ABRIR_CMD}({js_str(competencia)}, {js_str(numero_sif)})"]
     for it in plano:
-        cmds.append(f"{ITEM_CMD}({js_str(it['descricao'])}, {js_num(it['id'])}, {js_num(it['quantidade'])})")
+        cmds.append(f"{ITEM_CMD}({js_str(it['descricao'])}, {js_num(it['id'])}, {js_num(it['quantidade'])}, "
+                    f"{js_str(it.get('ingrediente') or '')})")
     cmds.append(f"{FINALIZAR_CMD}({js_str(competencia)}, {js_num(len(plano))})")
     return cmds
 

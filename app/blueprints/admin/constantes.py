@@ -129,6 +129,9 @@ SECOES = {
         "extras": [
             {"campo": "descricao_busca", "rotulo": "Descrição usada na busca do portal", "rotulo_curto": "Busca no portal",
              "ajuda": "Texto digitado no campo “Produto” da pesquisa de produto padronizado."},
+            {"campo": "ingrediente", "rotulo": "Tipo de ingrediente (linha a selecionar)", "rotulo_curto": "Ingrediente",
+             "opcional": True, "opcoes": ["MIX", "Único"],
+             "ajuda": "Quando a busca devolve duas linhas com o mesmo ID (MIX e Único), escolhe qual. Vazio = a primeira linha com o ID."},
         ],
     },
 }
@@ -245,6 +248,9 @@ def register(bp):
                         return redirect(request.url)
                     extras[ex["campo"]] = int(valor)
                     continue
+                if valor and ex.get("opcoes") and valor not in ex["opcoes"]:
+                    flash(f"{ex['rotulo']}: use uma das opções ({', '.join(ex['opcoes'])}).", "warning")
+                    return redirect(request.url)
                 if not valor and not ex.get("opcional"):
                     flash(f"Informe: {ex['rotulo']}.", "warning")
                     return redirect(request.url)

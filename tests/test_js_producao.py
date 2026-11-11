@@ -110,7 +110,7 @@ def test_produto_nao_encontrado_fecha_dialogos_e_o_proximo_funciona(browser):
     abrir_inclusao(page)
     r = rodar(page, 'incluirProdutoProducao("APRESUNTADO", 99999, 4)')
     assert r.startswith("Erro: [PRODUTO_NAO_ENCONTRADO]") and "id=99999" in r and "4 resultado" not in r
-    assert "ids " in r                                   # diagnostico: o que a busca realmente devolveu
+    assert "17178 [MIX]" in r                            # diagnostico: o que a busca realmente devolveu (id [ingrediente])
     assert page.evaluate("document.querySelectorAll('.ui-dialog.open').length") == 0
     assert estado(page)["produtos"] == []
     assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 2)').startswith("OK")
@@ -125,6 +125,26 @@ def test_mesmo_produto_do_portal_duas_vezes_sao_duas_linhas(browser):
     assert rodar(page, 'incluirProdutoProducao("BACON", 17189, 3.5)').startswith("OK")
     assert rodar(page, 'finalizarRegistroProducao("09/2026", 2)').startswith("OK")
     assert estado(page)["saved"]["produtos"] == [{"id": 17189, "qtd": 2}, {"id": 17189, "qtd": 3.5}]
+
+
+def test_ingrediente_escolhe_a_linha_certa_entre_ids_iguais(browser):
+    """A busca devolve duas linhas com id=18538 (MIX primeiro, Unico depois): sem ingrediente vale a primeira."""
+    page = abrir(browser)
+    abrir_inclusao(page)
+    assert rodar(page, 'incluirProdutoProducao("RESIDUOS", 18538, 1)').startswith("OK")              # sem 4o argumento
+    assert rodar(page, 'incluirProdutoProducao("RESIDUOS", 18538, 2, "")').startswith("OK")
+    assert rodar(page, 'incluirProdutoProducao("RESIDUOS", 18538, 3, "Único")').startswith("OK")
+    assert rodar(page, 'incluirProdutoProducao("RESIDUOS", 18538, 4, "MIX")').startswith("OK")
+    assert rodar(page, 'incluirProdutoProducao("RESIDUOS", 18538, 5, "unico")').startswith("OK")     # sem acento/caixa tambem casa
+    assert estado(page)["ingredientes"] == ["MIX", "MIX", "Único", "MIX", "Único"]
+
+
+def test_ingrediente_inexistente_e_erro_com_diagnostico(browser):
+    page = abrir(browser)
+    abrir_inclusao(page)
+    r = rodar(page, 'incluirProdutoProducao("MIUDOS", 18321, 1, "Único")')      # 18321 so tem a linha MIX
+    assert r.startswith("Erro: [PRODUTO_NAO_ENCONTRADO]") and 'ingrediente "Único"' in r and "18321 [MIX]" in r
+    assert estado(page)["produtos"] == []
 
 
 def test_busca_sem_resultado(browser):

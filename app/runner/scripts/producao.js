@@ -4,7 +4,9 @@
 // Comandos chamados pelo Python (app/logic/producao.py):
 //   abrirInclusaoProducao(competencia, sif)           "MM/AAAA", nº do registro do estabelecimento
 //        -> abre a tela de inclusão e preenche estabelecimento, período e "Produção = Sim"
-//   incluirProdutoProducao(descricao, idProduto, qtd) -> um produto padronizado (busca por descrição, seleção por id)
+//   incluirProdutoProducao(descricao, idProduto, qtd, ingrediente)
+//        -> um produto padronizado (busca por descrição, seleção por id; `ingrediente` "MIX"/"Único" desempata linhas
+//           com o mesmo id; vazio = a primeira linha com o id)
 //   finalizarRegistroProducao(competencia, esperados) -> confere cabeçalho e nº de linhas e salva (Confirmar)
 //   -> cada um devolve "OK: ..." | "Erro: [CODIGO] ..."
 //
@@ -263,14 +265,18 @@
     return f ? f.querySelector("tbody.ui-datatable-data") : null;
   };
 
-  async function selecionarProduto(form, idProduto) {
+  // "nomeIngrediente" do data-rk da linha (normalizado), ou "".
+  const ingredienteDe = (rk) => S.norm(((/nomeIngrediente=([^,\]]*)/.exec(rk || "")) || [])[1] || "");
+
+  async function selecionarProduto(form, idProduto, ingrediente) {
     const re = new RegExp(`(^|[^A-Za-z0-9_])id=${String(idProduto)}(?![0-9])`);
+    const ing = S.norm(ingrediente || "");
     const tabela = () => { const tb = corpoBusca(form); return tb ? (S.tableOf(tb) || tb.parentElement) : null; };
     const acha = () => {
       const tb = corpoBusca(form);
       for (const linha of (tb ? tb.querySelectorAll("tr[data-rk]") : [])) {
         const rk = linha.getAttribute("data-rk");
-        if (rk && re.test(rk)) {
+        if (rk && re.test(rk) && (!ing || ingredienteDe(rk) === ing)) {
           const radio = linha.querySelector(".ui-radiobutton-box");
           if (radio) return radio;
         }
@@ -283,7 +289,7 @@
     return true;
   }
 
-  window.incluirProdutoProducao = async function incluirProdutoProducao(descricao, idProduto, quantidade) {
+  window.incluirProdutoProducao = async function incluirProdutoProducao(descricao, idProduto, quantidade, ingrediente) {
     let adicionando = false;     // a partir do clique em "Adicionar" um erro não pode mais ser repetido
     try {
       if (!formExists(FI)) return exc("SEM_FORMULARIO", "formulário de inclusão do mapa de produção não está aberto");
@@ -321,13 +327,19 @@
         { timeout: 10000, label: "resultado da busca do produto" });
 
       // 4) seleciona o produto pelo id EXATO e confirma (o botão só habilita depois da seleção)
-      if (!(await selecionarProduto(fQry, idProduto))) {
+      if (!(await selecionarProduto(fQry, idProduto, ingrediente))) {
         const tb = corpoBusca(fQry);
         const vistos = Array.from(tb ? tb.querySelectorAll("tr[data-rk]") : [])
-          .map(l => ((l.getAttribute("data-rk") || "").match(/(?:^|[^A-Za-z0-9_])id=(\d+)/) || [])[1]).filter(Boolean);
+          .map(l => {
+            const rk = l.getAttribute("data-rk") || "";
+            const id = (rk.match(/(?:^|[^A-Za-z0-9_])id=(\d+)/) || [])[1];
+            const ing = (/nomeIngrediente=([^,\]]*)/.exec(rk) || [])[1];
+            return id ? `${id}${ing ? " [" + ing + "]" : ""}` : null;
+          }).filter(Boolean);
         S.closeDialogs(DIALOGOS);
-        return `Erro: [PRODUTO_NAO_ENCONTRADO] id=${idProduto} ("${descricao}") não apareceu na busca do portal ` +
-          `(termo digitado: "${descricao}"; ${vistos.length} resultado(s) na página atual${vistos.length ? ": ids " + vistos.slice(0, 8).join(", ") : ""}).`;
+        const comIng = ingrediente ? ` com ingrediente "${ingrediente}"` : "";
+        return `Erro: [PRODUTO_NAO_ENCONTRADO] id=${idProduto}${comIng} ("${descricao}") não apareceu na busca do portal ` +
+          `(termo digitado: "${descricao}"; ${vistos.length} resultado(s) na página atual${vistos.length ? ": " + vistos.slice(0, 8).join(", ") : ""}).`;
       }
       await esperarAjax();
       await confirmarSelecao(fQry, ":commandDialogBind_", LEG.vinculaProduto,
@@ -354,7 +366,7 @@
         return `Erro: [INCLUIR_PRODUTO] ${descricao}: ${err}`;
       }
       if (dialogoVisivel(W.novo)) { try { PF(W.novo).hide(); } catch (_) { /* já fechado */ } }
-      return ok(`Produto ${idProduto} (${descricao}) incluído: ${quantidade}.`);
+      return ok(`Produto ${idProduto}${ingrediente ? " [" + ingrediente + "]" : ""} (${descricao}) incluído: ${quantidade}.`);
     } catch (e) {
       console.error("incluirProdutoProducao:EXCEPTION", e);
       const msg = String((e && e.message) || e);

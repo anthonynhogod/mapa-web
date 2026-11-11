@@ -28,8 +28,15 @@
     {% for ex in cfg.extras or [] %}
     <div class="cst-campo">
       <label for="{{ ex.campo }}">{{ ex.rotulo }}</label>
+      {% if ex.opcoes %}
+      <select id="{{ ex.campo }}" name="{{ ex.campo }}">
+        <option value="">(primeira linha com o ID)</option>
+        {% for o in ex.opcoes %}<option value="{{ o }}" {{ 'selected' if item and item[ex.campo] == o else '' }}>{{ o }}</option>{% endfor %}
+      </select>
+      {% else %}
       <input type="{{ 'number' if ex.numerico else 'text' }}" {{ 'min=1' if ex.numerico else '' }} id="{{ ex.campo }}" name="{{ ex.campo }}" {{ '' if ex.opcional else 'required' }}
              value="{{ '' if (not item or item[ex.campo] is none) else item[ex.campo] }}">
+      {% endif %}
       {% if ex.ajuda %}<small>{{ ex.ajuda }}</small>{% endif %}
     </div>
     {% endfor %}
